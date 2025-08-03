@@ -107,20 +107,21 @@ def sort_stocks(results, sort_by='ticker', sort_order='asc'):
     
     # Add popularity scores to results
     for result in results:
-        result['popularity'] = StockPopularity.get_popularity_score(result['ticker'])
-        # Calculate distance from nearest support level
-        try:
-            price = float(result['price'])
-            distances = []
-            if 'ma21' in result and result['ma21']:
-                distances.append(abs(price - float(result['ma21'])) / float(result['ma21']))
-            if 'ma50' in result and result['ma50']:
-                distances.append(abs(price - float(result['ma50'])) / float(result['ma50']))
-            if 'ma200' in result and result['ma200']:
-                distances.append(abs(price - float(result['ma200'])) / float(result['ma200']))
-            result['distance'] = min(distances) if distances else 0
-        except (ValueError, TypeError):
-            result['distance'] = 0
+        if 'ticker' in result:
+            result['popularity'] = StockPopularity.get_popularity_score(result['ticker'])
+            # Calculate distance from nearest support level
+            try:
+                price = float(result.get('price', 0))
+                distances = []
+                if result.get('ma21'):
+                    distances.append(abs(price - float(result['ma21'])) / float(result['ma21']))
+                if result.get('ma50'):
+                    distances.append(abs(price - float(result['ma50'])) / float(result['ma50']))
+                if result.get('ma200'):
+                    distances.append(abs(price - float(result['ma200'])) / float(result['ma200']))
+                result['distance'] = min(distances) if distances else 0
+            except (ValueError, TypeError):
+                result['distance'] = 0
     
     # Define sort key
     if sort_by == 'price':
@@ -168,39 +169,53 @@ def logout():
 @login_required
 def index():
     """Main page showing stocks approaching support or resistance levels"""
-    settings = get_user_settings()
-    support_threshold = settings.support_threshold / 100.0  # Convert percentage to decimal
-    resistance_threshold = settings.resistance_threshold / 100.0  # Convert percentage to decimal
-    level_type = request.args.get('level_type', settings.level_type or 'support')
-    sort_by = request.args.get('sort', settings.sort_by)
-    sort_order = request.args.get('order', settings.sort_order)
-    sector_filter = request.args.get('sector', settings.sector_filter or 'All')
-    
     try:
+        settings = get_user_settings()
+        support_threshold = settings.support_threshold / 100.0  # Convert percentage to decimal
+        resistance_threshold = settings.resistance_threshold / 100.0  # Convert percentage to decimal
+        level_type = request.args.get('level_type', settings.level_type or 'support')
+        sort_by = request.args.get('sort', settings.sort_by)
+        sort_order = request.args.get('order', settings.sort_order)
+        sector_filter = request.args.get('sector', settings.sector_filter or 'All')
+        
         # Import managers here to avoid circular imports
-        from sector_data import sector_manager
         from crypto_data import crypto_manager
         
         # Get stocks and crypto near support/resistance with filtering
-        results = analyzer.get_stocks_near_levels(support_threshold, resistance_threshold, level_type, sector_filter, include_crypto=True)
+        results = []
+        try:
+            results = analyzer.get_stocks_near_levels(support_threshold, resistance_threshold, level_type, sector_filter, include_crypto=True)
+            if not results:
+                results = []
+        except Exception as data_error:
+            logging.error(f"Error fetching stock data: {data_error}")
+            results = []
         
         # Debug logging
         current_threshold = support_threshold if level_type == 'support' else resistance_threshold
         logging.info(f"Level type: {level_type}, Threshold: {current_threshold}, Sector filter: {sector_filter}")
-        logging.info(f"Raw results count: {len(results) if results else 0}")
-        if results:
-            stock_count = sum(1 for r in results if r.get('asset_type', 'stock') == 'stock')
-            crypto_count = sum(1 for r in results if r.get('asset_type', 'stock') == 'crypto')
-            logging.info(f"Stock results: {stock_count}, Crypto results: {crypto_count}")
+        logging.info(f"Raw results count: {len(results)}")
         
-        # Sort results
-        results = sort_stocks(results, sort_by, sort_order)
+        # Sort results safely
+        try:
+            results = sort_stocks(results, sort_by, sort_order)
+        except Exception as sort_error:
+            logging.error(f"Error sorting results: {sort_error}")
+            results = []
         
-        # Get summary statistics
-        total_stocks_available = len(analyzer.get_all_sp500_tickers())
-        total_stocks_tracked = len(analyzer.get_top_stocks())
-        total_crypto_available = len(crypto_manager.get_all_crypto_symbols())
-        total_crypto_tracked = len(crypto_manager.get_top_crypto())
+        # Get summary statistics with error handling
+        try:
+            total_stocks_available = len(analyzer.get_all_sp500_tickers())
+            total_stocks_tracked = len(analyzer.get_top_stocks())
+            total_crypto_available = len(crypto_manager.get_all_crypto_symbols())
+            total_crypto_tracked = len(crypto_manager.get_top_crypto())
+        except Exception as stats_error:
+            logging.error(f"Error getting statistics: {stats_error}")
+            total_stocks_available = 0
+            total_stocks_tracked = 0
+            total_crypto_available = 0
+            total_crypto_tracked = 0
+        
         total_assets_tracked = total_stocks_tracked + total_crypto_tracked
         assets_near_levels = len(results)
         
@@ -209,14 +224,18 @@ def index():
         crypto_categories = ['Crypto']  # Simplified to just "Crypto"
         all_filters = stock_sectors + crypto_categories
         
-        # Combine sector summaries
+        # Combine sector summaries with error handling
         sector_summary = {}
-        for sector in stock_sectors:
-            count = sum(1 for ticker in analyzer.TICKERS if analyzer.get_stock_sector(ticker) == sector)
-            sector_summary[sector] = count
-        
-        # Simplified crypto summary (all crypto under "Crypto")
-        sector_summary['Crypto'] = len(crypto_manager.get_top_crypto())
+        try:
+            for sector in stock_sectors:
+                count = sum(1 for ticker in analyzer.TICKERS if analyzer.get_stock_sector(ticker) == sector)
+                sector_summary[sector] = count
+            
+            # Simplified crypto summary (all crypto under "Crypto")
+            sector_summary['Crypto'] = len(crypto_manager.get_top_crypto())
+        except Exception as sector_error:
+            logging.error(f"Error calculating sector summary: {sector_error}")
+            sector_summary = {'All': 0}
         
         # Calculate threshold for template (use support_threshold for display)
         current_threshold = support_threshold if level_type == 'support' else resistance_threshold
@@ -241,7 +260,7 @@ def index():
                              total_stocks=total_stocks_tracked,
                              total_assets=total_assets_tracked)
     except Exception as e:
-        logging.error(f"Error in index route: {e}")
+        logging.error(f"Critical error in index route: {e}")
         return render_template('index.html', 
                              results=[], 
                              support_threshold=3.0,

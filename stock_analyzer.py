@@ -376,82 +376,103 @@ class StockAnalyzer:
         """Get stocks and optionally crypto approaching support or resistance levels with filtering and favorites support"""
         results = []
 
-        # Handle favorites filter
-        if sector_filter == 'Favorites':
-            from models import UserFavorites
-            favorite_tickers = UserFavorites.get_favorite_tickers()
-            if not favorite_tickers:
-                return results
+        try:
+            # Handle favorites filter
+            if sector_filter == 'Favorites':
+                try:
+                    from models import UserFavorites
+                    favorite_tickers = UserFavorites.get_favorite_tickers()
+                    if not favorite_tickers:
+                        return results
 
-            # Process favorite stocks
-            for ticker in favorite_tickers:
-                if ticker in self.ALL_SP500_TICKERS:  # Check against full S&P 500 list
-                    if level_type == 'support':
-                        result = self.check_support(ticker, support_threshold)
-                    else:
-                        result = self.check_resistance(ticker, resistance_threshold)
-                    
-                    if not result['error'] and result['zones'] not in (None, '', '—'):
-                        result['asset_type'] = 'stock'
-                        result['sector'] = self.get_stock_sector(ticker)
-                        result['company_name'] = self.get_company_name(ticker)
-                        results.append(result)
-                else:
-                    # Check if it's a crypto
-                    from crypto_data import crypto_manager
-                    crypto_symbols = crypto_manager.get_all_crypto_symbols()
-                    if ticker in crypto_symbols:
+                    # Process favorite stocks (limit to 50 for performance)
+                    favorite_tickers = favorite_tickers[:50]
+                    for ticker in favorite_tickers:
+                        try:
+                            if ticker in self.ALL_SP500_TICKERS:  # Check against full S&P 500 list
+                                if level_type == 'support':
+                                    result = self.check_support(ticker, support_threshold)
+                                else:
+                                    result = self.check_resistance(ticker, resistance_threshold)
+                                
+                                if not result.get('error') and result.get('zones') not in (None, '', '—'):
+                                    result['asset_type'] = 'stock'
+                                    result['sector'] = self.get_stock_sector(ticker)
+                                    result['company_name'] = self.get_company_name(ticker)
+                                    results.append(result)
+                            else:
+                                # Check if it's a crypto
+                                from crypto_data import crypto_manager
+                                crypto_symbols = crypto_manager.get_all_crypto_symbols()
+                                if ticker in crypto_symbols:
+                                    if level_type == 'support':
+                                        crypto_result = crypto_manager.check_crypto_support(ticker, support_threshold)
+                                    else:
+                                        crypto_result = crypto_manager.check_crypto_resistance(ticker, resistance_threshold)
+                                    if crypto_result and not crypto_result.get('error'):
+                                        results.append(crypto_result)
+                        except Exception as ticker_error:
+                            logging.error(f"Error processing favorite ticker {ticker}: {ticker_error}")
+                            continue
+                    return results
+                except Exception as fav_error:
+                    logging.error(f"Error processing favorites: {fav_error}")
+                    return results
+
+            # Get stock results from top stocks only
+            tickers_to_check = self._top_stocks[:30]  # Limit to 30 for performance
+            if sector_filter != 'All' and not sector_filter.startswith('Crypto'):
+                # Filter by stock sector
+                tickers_to_check = [ticker for ticker in self._top_stocks if self.get_stock_sector(ticker) == sector_filter][:20]
+            elif sector_filter.startswith('Crypto'):
+                # Only crypto filter selected, skip stocks
+                tickers_to_check = []
+
+            # Process stocks in batches for better performance
+            batch_size = 10
+            for i in range(0, len(tickers_to_check), batch_size):
+                batch = tickers_to_check[i:i + batch_size]
+                for ticker in batch:
+                    try:
                         if level_type == 'support':
-                            crypto_result = crypto_manager.check_crypto_support(ticker, support_threshold)
+                            result = self.check_support(ticker, support_threshold)
                         else:
-                            crypto_result = crypto_manager.check_crypto_resistance(ticker, resistance_threshold)
-                        if crypto_result and not crypto_result.get('error'):
-                            results.append(crypto_result)
-            return results
+                            result = self.check_resistance(ticker, resistance_threshold)
+                            
+                        if not result.get('error') and result.get('zones') not in (None, '', '—'):
+                            result['sector'] = self.get_stock_sector(ticker)
+                            result['company_name'] = self.get_company_name(ticker)
+                            result['asset_type'] = 'stock'
+                            results.append(result)
+                    except Exception as e:
+                        logging.error(f"Error processing {ticker}: {e}")
+                        continue
 
-        # Get stock results from top stocks only
-        tickers_to_check = self._top_stocks
-        if sector_filter != 'All' and not sector_filter.startswith('Crypto'):
-            # Filter by stock sector
-            tickers_to_check = [ticker for ticker in self._top_stocks if self.get_stock_sector(ticker) == sector_filter]
-        elif sector_filter.startswith('Crypto'):
-            # Only crypto filter selected, skip stocks
-            tickers_to_check = []
+            # Get crypto results if enabled
+            if include_crypto:
+                try:
+                    from crypto_data import crypto_manager
+                    if sector_filter == 'Crypto':
+                        # Only crypto selected
+                        if level_type == 'support':
+                            crypto_results = crypto_manager.get_cryptos_near_support(support_threshold)
+                        else:
+                            crypto_results = crypto_manager.get_cryptos_near_resistance(resistance_threshold)
+                        results.extend(crypto_results or [])
+                    elif sector_filter == 'All':
+                        # All assets selected, include crypto
+                        if level_type == 'support':
+                            crypto_results = crypto_manager.get_cryptos_near_support(support_threshold)
+                        else:
+                            crypto_results = crypto_manager.get_cryptos_near_resistance(resistance_threshold)
+                        results.extend(crypto_results or [])
+                    # If a specific stock sector is selected, skip crypto
+                except Exception as crypto_error:
+                    logging.error(f"Error processing crypto data: {crypto_error}")
 
-        for ticker in tickers_to_check:
-            try:
-                if level_type == 'support':
-                    result = self.check_support(ticker, support_threshold)
-                else:
-                    result = self.check_resistance(ticker, resistance_threshold)
-                    
-                if not result['error'] and result['zones'] not in (None, '', '—'):
-                    result['sector'] = self.get_stock_sector(ticker)
-                    result['company_name'] = self.get_company_name(ticker)
-                    result['asset_type'] = 'stock'
-                    results.append(result)
-            except Exception as e:
-                logging.error(f"Error processing {ticker}: {e}")
-                continue
-
-        # Get crypto results if enabled
-        if include_crypto:
-            from crypto_data import crypto_manager
-            if sector_filter == 'Crypto':
-                # Only crypto selected
-                if level_type == 'support':
-                    crypto_results = crypto_manager.get_cryptos_near_support(support_threshold)
-                else:
-                    crypto_results = crypto_manager.get_cryptos_near_resistance(resistance_threshold)
-                results.extend(crypto_results)
-            elif sector_filter == 'All':
-                # All assets selected, include crypto
-                if level_type == 'support':
-                    crypto_results = crypto_manager.get_cryptos_near_support(support_threshold)
-                else:
-                    crypto_results = crypto_manager.get_cryptos_near_resistance(resistance_threshold)
-                results.extend(crypto_results)
-            # If a specific stock sector is selected, skip crypto
+        except Exception as e:
+            logging.error(f"Critical error in get_stocks_near_levels: {e}")
+            return []
 
         return results
 

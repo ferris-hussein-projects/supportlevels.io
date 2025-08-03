@@ -213,6 +213,7 @@
             .catch(error => console.log('Could not toggle favorite:', error));
         }
     </script>
+    <script src="{{ url_for('static', filename='js/favorites.js') }}"></script>
 
     {% block scripts %}{% endblock %}
 </body>
