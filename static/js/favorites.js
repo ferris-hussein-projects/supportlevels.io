@@ -1,4 +1,3 @@
-
 // Favorites management
 let favorites = [];
 
@@ -24,7 +23,7 @@ function toggleFavorite(ticker, assetType = 'stock', buttonElement = null) {
             } else {
                 favorites.push(ticker);
             }
-            
+
             // Update button appearance if provided
             if (buttonElement) {
                 updateFavoriteButton(buttonElement, ticker);
@@ -44,7 +43,7 @@ function toggleFavorite(ticker, assetType = 'stock', buttonElement = null) {
 // Function to update a single favorite button
 function updateFavoriteButton(button, ticker) {
     const isFavorite = favorites.includes(ticker);
-    
+
     if (isFavorite) {
         button.classList.add('favorited');
         button.style.color = '#ffc107';
@@ -52,7 +51,7 @@ function updateFavoriteButton(button, ticker) {
         button.classList.remove('favorited');
         button.style.color = '';
     }
-    
+
     const icon = button.querySelector('i');
     if (icon) {
         icon.setAttribute('data-feather', 'star');
@@ -79,19 +78,14 @@ function loadFavoriteStatuses() {
         .then(data => {
             favorites = data.favorites || [];
 
-            // Update all favorite buttons
+            // Update favorite button states
             document.querySelectorAll('.favorite-btn').forEach(btn => {
-                try {
-                    const onclickAttr = btn.getAttribute('onclick');
-                    if (onclickAttr) {
-                        const tickerMatch = onclickAttr.match(/'([^']+)'/);
-                        if (tickerMatch) {
-                            const ticker = tickerMatch[1];
-                            updateFavoriteButton(btn, ticker);
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error processing favorite button:', error);
+                const ticker = btn.getAttribute('data-ticker');
+                if (ticker) {
+                    const isFavorite = favorites.includes(ticker);
+                    btn.classList.toggle('favorited', isFavorite);
+                    btn.innerHTML = isFavorite ? '★' : '☆';
+                    btn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
                 }
             });
         })
@@ -100,7 +94,7 @@ function loadFavoriteStatuses() {
         });
 }
 
-// Initialize favorites when page loads
+// Load favorite statuses on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadFavoriteStatuses();
 });

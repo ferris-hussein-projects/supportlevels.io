@@ -105,6 +105,9 @@ def sort_stocks(results, sort_by='ticker', sort_order='asc'):
     if not results:
         return results
     
+    # Filter out any None or invalid results first
+    valid_results = []
+    
     # Add popularity scores to results
     for result in results:
         try:
@@ -123,18 +126,16 @@ def sort_stocks(results, sort_by='ticker', sort_order='asc'):
                     result['distance'] = min(distances) if distances else 0
                 except (ValueError, TypeError):
                     result['distance'] = 0
+                
+                # Add to valid results only if processing was successful
+                valid_results.append(result)
             else:
                 # Skip invalid results
                 logging.warning(f"Invalid result in sort_stocks: {result}")
                 continue
         except Exception as e:
             logging.error(f"Error processing result in sort_stocks: {e}")
-            # Remove the problematic result from the list
-            if result in results:
-                results.remove(result)
-    
-    # Filter out any None or invalid results
-    valid_results = [r for r in results if r and isinstance(r, dict) and 'ticker' in r]
+            continue
     
     # Define sort key
     if sort_by == 'price':
