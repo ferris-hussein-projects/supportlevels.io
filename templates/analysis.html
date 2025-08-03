@@ -228,8 +228,7 @@
                                         Price {% if sort_by == 'price' %}{% if sort_order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}
                                     </a>
                                 </th>
-                                <th>Support Timeframes</th>
-                                <th>Support Prices</th>
+                                <th>Support Levels</th>
                                 <th>
                                     <a href="?sort=popularity&order={{ 'desc' if sort_by == 'popularity' and sort_order == 'asc' else 'asc' }}{% if sector_filter and sector_filter != 'All' %}&sector={{ sector_filter }}{% endif %}" 
                                        class="text-decoration-none text-white">
@@ -287,10 +286,24 @@
                                     </strong>
                                 </td>
                                 <td>
-                                    <span class="badge bg-warning">{{ stock.zones }}</span>
-                                </td>
-                                <td>
-                                    <strong class="text-success">{{ stock.support_prices or '—' }}</strong>
+                                    {% if stock.support_timeframes and stock.support_levels and stock.support_timeframes|length > 0 %}
+                                        <div class="d-flex flex-column gap-1">
+                                        {% for i in range(stock.support_timeframes|length) %}
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="badge bg-warning">{{ stock.support_timeframes[i] }}</span>
+                                                <strong class="text-success">
+                                                    {% if stock.asset_type == 'crypto' %}
+                                                        ${{ "%.4f"|format(stock.support_levels[i]) }}
+                                                    {% else %}
+                                                        ${{ "%.2f"|format(stock.support_levels[i]) }}
+                                                    {% endif %}
+                                                </strong>
+                                            </div>
+                                        {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <div class="d-flex align-items-center gap-1">

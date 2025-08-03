@@ -325,6 +325,7 @@ class StockAnalyzer:
                 'zones': ', '.join(zones) or '—',
                 'support_prices': support_prices_str,
                 'support_levels': support_prices,  # Array for programmatic access
+                'support_timeframes': zones,  # Array of timeframe names for pairing
                 'support_1m': round(support_1m, 2) if support_1m else None,
                 'support_6m': round(support_6m, 2) if support_6m else None,
                 'support_1y': round(support_1y, 2) if support_1y else None,
