@@ -571,25 +571,151 @@ class StockAnalyzer:
         except Exception:
             return 0
 
+    def _find_pivot_highs(self, prices, window=5):
+        """Find pivot highs (swing highs) in price data"""
+        pivot_highs = []
+        try:
+            for i in range(window, len(prices) - window):
+                current_price = prices.iloc[i]
+                is_pivot_high = True
+                
+                # Check if current price is higher than surrounding prices
+                for j in range(i - window, i + window + 1):
+                    if j != i and prices.iloc[j] >= current_price:
+                        is_pivot_high = False
+                        break
+                
+                if is_pivot_high:
+                    pivot_highs.append(current_price)
+            
+            return pivot_highs
+        except Exception:
+            return []
+    
+    def _find_resistance_price_clusters(self, prices, volumes=None, num_clusters=3):
+        """Find price levels where price spent significant time at resistance levels (clustering)"""
+        try:
+            # Focus on upper price ranges for resistance
+            price_75th = prices.quantile(0.75)
+            high_prices = prices[prices >= price_75th]
+            
+            if len(high_prices) < 5:
+                return []
+            
+            # Create price buckets for high price range
+            price_range = high_prices.max() - high_prices.min()
+            if price_range == 0:
+                return []
+            
+            bucket_size = price_range / 30  # 30 buckets
+            price_counts = {}
+            
+            for i, price in enumerate(high_prices):
+                bucket = int((price - high_prices.min()) / bucket_size)
+                bucket_price = high_prices.min() + bucket * bucket_size
+                
+                # Weight by volume if available
+                if volumes is not None and i < len(volumes):
+                    weight = volumes.iloc[high_prices.index[i]] if high_prices.index[i] < len(volumes) else 1
+                else:
+                    weight = 1
+                price_counts[bucket_price] = price_counts.get(bucket_price, 0) + weight
+            
+            # Find top clusters
+            sorted_clusters = sorted(price_counts.items(), key=lambda x: x[1], reverse=True)
+            return [price for price, count in sorted_clusters[:num_clusters]]
+            
+        except Exception:
+            return []
+    
+    def _count_resistance_tests(self, prices, resistance_level, tolerance=0.02):
+        """Count how many times price has tested a resistance level"""
+        try:
+            test_count = 0
+            resistance_range = resistance_level * tolerance
+            
+            for price in prices:
+                if abs(price - resistance_level) <= resistance_range:
+                    test_count += 1
+            
+            return min(test_count, 10)  # Cap at 10 for scoring purposes
+        except Exception:
+            return 0
+
     def _calculate_period_resistance(self, closes, lookback_days):
-        """Calculate resistance level for a given period using highest high and key resistance zones"""
+        """Calculate resistance level using pivot highs, volume analysis, and price clustering (enhanced method)"""
         try:
             if len(closes) < lookback_days:
                 lookback_days = len(closes)
 
             period_data = closes.tail(lookback_days)
+            if len(period_data) < 10:  # Need minimum data points
+                return None
 
-            # Find the highest high in the period
+            # Get volume data if available
+            hist = self._get_cached_data(closes.name if hasattr(closes, 'name') else 'UNKNOWN')
+            volumes = None
+            if hist is not None and 'Volume' in hist.columns:
+                volumes = hist['Volume'].tail(lookback_days)
+
+            # Method 1: Find pivot highs (swing highs)
+            pivot_highs = self._find_pivot_highs(period_data, window=5)
+            
+            # Method 2: Price clustering - find areas where price spent significant time at high levels
+            price_clusters = self._find_resistance_price_clusters(period_data, volumes)
+            
+            # Method 3: Traditional resistance levels
             period_high = period_data.max()
+            resistance_percentiles = [period_data.quantile(q) for q in [0.95, 0.90, 0.85]]
+            
+            # Combine all potential resistance levels
+            all_resistances = []
+            
+            # Add pivot highs with higher weight
+            all_resistances.extend([(price, 3.0) for price in pivot_highs])
+            
+            # Add price clusters with medium weight
+            all_resistances.extend([(price, 2.0) for price in price_clusters])
+            
+            # Add traditional levels with lower weight
+            all_resistances.extend([(price, 1.0) for price in resistance_percentiles])
+            all_resistances.append((period_high, 1.5))
+            
+            if not all_resistances:
+                return period_high
+            
+            # Find the most significant resistance level
+            current_price = closes.iloc[-1]
+            significant_resistances = []
+            
+            for price, weight in all_resistances:
+                if price and price > current_price:  # Only consider levels above current price
+                    # Check if this level has been tested multiple times
+                    test_count = self._count_resistance_tests(period_data, price, tolerance=0.02)
+                    final_weight = weight * (1 + test_count * 0.5)
+                    significant_resistances.append((price, final_weight))
+            
+            if not significant_resistances:
+                return period_high
+            
+            # Return the resistance level with highest combined weight
+            # But prefer levels that are not too far from current price
+            best_resistance = None
+            best_score = 0
+            
+            for price, weight in significant_resistances:
+                # Distance penalty - prefer levels closer to current price
+                distance_factor = max(0.1, 1 - abs(price - current_price) / current_price)
+                score = weight * distance_factor
+                
+                if score > best_score:
+                    best_score = score
+                    best_resistance = price
+            
+            return best_resistance if best_resistance else period_high
 
-            # Also consider areas where price has been rejected multiple times (resistance zones)
-            # Calculate resistance as the 90th percentile of prices in the period
-            resistance_zone = period_data.quantile(0.90)
-
-            # Return the lower of the two (more conservative resistance)
-            return min(period_high, resistance_zone)
-
-        except Exception:
+        except Exception as e:
+            logging.error(f"Error in _calculate_period_resistance: {e}")
             return None
 
     def get_stocks_near_levels(self, support_threshold=0.001, resistance_threshold=0.001, level_type='support', sector_filter='All', include_crypto=True):

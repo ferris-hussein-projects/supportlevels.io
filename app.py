@@ -255,7 +255,7 @@ def debug():
 
 @app.route('/analysis')
 def analysis():
-    """Main page showing stocks approaching support levels"""
+    """Main page showing stocks approaching support or resistance levels"""
     # Check if user is logged in, redirect to login if not
     if 'user_id' not in session:
         return redirect(url_for('login'))
@@ -265,14 +265,18 @@ def analysis():
     sort_by = request.args.get('sort', settings.sort_by)
     sort_order = request.args.get('order', settings.sort_order)
     sector_filter = request.args.get('sector', settings.sector_filter or 'All')
+    level_type = request.args.get('level_type', settings.level_type or 'support')
     
     try:
         # Import managers here to avoid circular imports
         from sector_data import sector_manager
         from crypto_data import crypto_manager
         
-        # Get stocks and crypto near support with filtering
-        results = analyzer.get_stocks_near_support(threshold, sector_filter, include_crypto=True)
+        # Get stocks and crypto near support/resistance levels with filtering
+        if level_type == 'resistance':
+            results = analyzer.get_stocks_near_levels(threshold, threshold, 'resistance', sector_filter, include_crypto=True)
+        else:
+            results = analyzer.get_stocks_near_levels(threshold, threshold, 'support', sector_filter, include_crypto=True)
         
         # Note: Removed halal filtering - show all assets with halal indicators
         
@@ -313,6 +317,7 @@ def analysis():
                              sort_by=sort_by,
                              sort_order=sort_order,
                              sector_filter=sector_filter,
+                             level_type=level_type,
                              all_sectors=all_filters,
                              sector_summary=sector_summary)
     except Exception as e:
@@ -329,6 +334,7 @@ def analysis():
                              sort_by='ticker',
                              sort_order='asc',
                              sector_filter='All',
+                             level_type=level_type,
                              all_sectors=[],
                              sector_summary={},
                              error="System error loading analysis data. Please refresh the page.")

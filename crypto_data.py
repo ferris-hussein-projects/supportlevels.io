@@ -609,25 +609,140 @@ class CryptoDataManager:
         except Exception:
             return 0
 
+    def _find_crypto_pivot_highs(self, prices, window=7):
+        """Find pivot highs in crypto data with adjusted window for volatility"""
+        pivot_highs = []
+        try:
+            for i in range(window, len(prices) - window):
+                current_price = prices.iloc[i]
+                is_pivot_high = True
+                
+                for j in range(i - window, i + window + 1):
+                    if j != i and prices.iloc[j] >= current_price:
+                        is_pivot_high = False
+                        break
+                
+                if is_pivot_high:
+                    pivot_highs.append(current_price)
+            
+            return pivot_highs
+        except Exception:
+            return []
+    
+    def _find_crypto_resistance_price_clusters(self, prices, volumes=None, num_clusters=3):
+        """Find price clusters for crypto resistance with volatility adjustments"""
+        try:
+            # Focus on upper price ranges for resistance
+            price_75th = prices.quantile(0.75)
+            high_prices = prices[prices >= price_75th]
+            
+            if len(high_prices) < 5:
+                return []
+            
+            price_range = high_prices.max() - high_prices.min()
+            if price_range == 0:
+                return []
+            
+            # Larger buckets for crypto volatility
+            bucket_size = price_range / 20  # 20 buckets instead of 30
+            price_counts = {}
+            
+            for i, price in enumerate(high_prices):
+                bucket = int((price - high_prices.min()) / bucket_size)
+                bucket_price = high_prices.min() + bucket * bucket_size
+                
+                if volumes is not None and i < len(volumes):
+                    weight = volumes.iloc[high_prices.index[i]] if high_prices.index[i] < len(volumes) else 1
+                else:
+                    weight = 1
+                price_counts[bucket_price] = price_counts.get(bucket_price, 0) + weight
+            
+            sorted_clusters = sorted(price_counts.items(), key=lambda x: x[1], reverse=True)
+            return [price for price, count in sorted_clusters[:num_clusters]]
+            
+        except Exception:
+            return []
+    
+    def _count_crypto_resistance_tests(self, prices, resistance_level, tolerance=0.03):
+        """Count resistance tests for crypto with higher tolerance"""
+        try:
+            test_count = 0
+            resistance_range = resistance_level * tolerance
+            
+            for price in prices:
+                if abs(price - resistance_level) <= resistance_range:
+                    test_count += 1
+            
+            return min(test_count, 8)  # Lower cap for crypto
+        except Exception:
+            return 0
+
     def _calculate_crypto_period_resistance(self, closes, lookback_days):
-        """Calculate resistance level for a given period using highest high and key resistance zones"""
+        """Calculate resistance level using enhanced method for crypto (higher volatility considered)"""
         try:
             if len(closes) < lookback_days:
                 lookback_days = len(closes)
 
             period_data = closes.tail(lookback_days)
+            if len(period_data) < 10:
+                return None
 
-            # Find the highest high in the period
+            # Get volume data if available
+            symbol = getattr(closes, 'name', 'UNKNOWN')
+            hist = self._get_cached_crypto_data(symbol)
+            volumes = None
+            if hist is not None and 'Volume' in hist.columns:
+                volumes = hist['Volume'].tail(lookback_days)
+
+            # Find pivot highs with larger window for crypto volatility
+            pivot_highs = self._find_crypto_pivot_highs(period_data, window=7)
+            
+            # Price clustering for crypto resistance
+            price_clusters = self._find_crypto_resistance_price_clusters(period_data, volumes)
+            
+            # Traditional levels with crypto-adjusted percentiles
             period_high = period_data.max()
+            resistance_percentiles = [period_data.quantile(q) for q in [0.90, 0.85, 0.80]]
+            
+            # Combine resistances with crypto-adjusted weights
+            all_resistances = []
+            all_resistances.extend([(price, 2.5) for price in pivot_highs])
+            all_resistances.extend([(price, 2.0) for price in price_clusters])
+            all_resistances.extend([(price, 1.0) for price in resistance_percentiles])
+            all_resistances.append((period_high, 1.5))
+            
+            if not all_resistances:
+                return period_high
+            
+            # Find most significant resistance (crypto-adjusted tolerance)
+            current_price = closes.iloc[-1]
+            significant_resistances = []
+            
+            for price, weight in all_resistances:
+                if price and price > current_price:
+                    test_count = self._count_crypto_resistance_tests(period_data, price, tolerance=0.03)  # Higher tolerance for crypto
+                    final_weight = weight * (1 + test_count * 0.3)
+                    significant_resistances.append((price, final_weight))
+            
+            if not significant_resistances:
+                return period_high
+            
+            # Return best weighted resistance
+            best_resistance = None
+            best_score = 0
+            
+            for price, weight in significant_resistances:
+                distance_factor = max(0.1, 1 - abs(price - current_price) / current_price)
+                score = weight * distance_factor
+                
+                if score > best_score:
+                    best_score = score
+                    best_resistance = price
+            
+            return best_resistance if best_resistance else period_high
 
-            # Also consider areas where price has been rejected multiple times (resistance zones)
-            # Calculate resistance as the 85th percentile of prices in the period (crypto is more volatile)
-            resistance_zone = period_data.quantile(0.85)
-
-            # Return the lower of the two (more conservative resistance)
-            return min(period_high, resistance_zone)
-
-        except Exception:
+        except Exception as e:
+            logging.error(f"Error in crypto resistance calculation: {e}")
             return None
 
     def get_cryptos_near_support(self, threshold: float = 0.03) -> List[Dict]:

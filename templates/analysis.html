@@ -181,16 +181,28 @@
 
         <!-- Controls -->
         <div class="row mb-3">
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <div class="d-flex gap-2 align-items-center">
                     <label for="thresholdSlider" class="form-label mb-0">Threshold:</label>
                     <input type="range" class="form-range" id="thresholdSlider" min="1" max="10" step="0.5" value="{{ threshold }}" style="width: 200px;">
                     <span id="thresholdValue" class="badge bg-primary">{{ "%.1f"|format(threshold) }}%</span>
                 </div>
             </div>
-            <div class="col-md-6 text-end">
+            <div class="col-md-4 text-center">
+                <div class="btn-group" role="group" aria-label="Level type toggle">
+                    <a href="?level_type=support{% for key, value in request.args.items() %}{% if key != 'level_type' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                       class="btn btn-sm {% if not request.args.get('level_type') or request.args.get('level_type') == 'support' %}btn-success{% else %}btn-outline-success{% endif %}">
+                        <i data-feather="trending-down" class="me-1"></i>Support
+                    </a>
+                    <a href="?level_type=resistance{% for key, value in request.args.items() %}{% if key != 'level_type' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                       class="btn btn-sm {% if request.args.get('level_type') == 'resistance' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+                        <i data-feather="trending-up" class="me-1"></i>Resistance
+                    </a>
+                </div>
+            </div>
+            <div class="col-md-4 text-end">
                 <div class="btn-group" role="group">
-                    <a href="{{ url_for('export_csv') }}{% if sector_filter and sector_filter != 'All' %}?sector={{ sector_filter }}{% endif %}" class="btn btn-outline-success">
+                    <a href="{{ url_for('export_csv') }}{% if sector_filter and sector_filter != 'All' %}?sector={{ sector_filter }}{% endif %}{% if request.args.get('level_type') %}&level_type={{ request.args.get('level_type') }}{% endif %}" class="btn btn-outline-success">
                         <i data-feather="download" class="me-2"></i>Export CSV
                     </a>
                     <button class="btn btn-outline-primary" onclick="location.reload()">
@@ -204,8 +216,10 @@
         {% if results %}
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Assets Near Support Levels</h5>
-                <span class="badge bg-info">{{ results|length }} found</span>
+                <h5 class="mb-0">
+                    Assets Near {% if request.args.get('level_type') == 'resistance' %}Resistance{% else %}Support{% endif %} Levels
+                </h5>
+                <span class="badge {% if request.args.get('level_type') == 'resistance' %}bg-danger{% else %}bg-success{% endif %}">{{ results|length }} found</span>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -228,7 +242,7 @@
                                         Price {% if sort_by == 'price' %}{% if sort_order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}
                                     </a>
                                 </th>
-                                <th>Support Levels</th>
+                                <th>{% if request.args.get('level_type') == 'resistance' %}Resistance{% else %}Support{% endif %} Levels</th>
                                 <th>
                                     <a href="?sort=popularity&order={{ 'desc' if sort_by == 'popularity' and sort_order == 'asc' else 'asc' }}{% if sector_filter and sector_filter != 'All' %}&sector={{ sector_filter }}{% endif %}" 
                                        class="text-decoration-none text-white">
@@ -286,16 +300,19 @@
                                     </strong>
                                 </td>
                                 <td>
-                                    {% if stock.support_timeframes and stock.support_levels and stock.support_timeframes|length > 0 %}
+                                    {% set is_resistance = request.args.get('level_type') == 'resistance' %}
+                                    {% set timeframes = stock.resistance_timeframes if is_resistance else stock.support_timeframes %}
+                                    {% set levels = stock.resistance_levels if is_resistance else stock.support_levels %}
+                                    {% if timeframes and levels and timeframes|length > 0 %}
                                         <div class="d-flex flex-column gap-1">
-                                        {% for i in range(stock.support_timeframes|length) %}
+                                        {% for i in range(timeframes|length) %}
                                             <div class="d-flex align-items-center gap-2">
-                                                <span class="badge bg-warning">{{ stock.support_timeframes[i] }}</span>
-                                                <strong class="text-success">
+                                                <span class="badge {% if is_resistance %}bg-danger{% else %}bg-warning{% endif %}">{{ timeframes[i] }}</span>
+                                                <strong class="{% if is_resistance %}text-danger{% else %}text-success{% endif %}">
                                                     {% if stock.asset_type == 'crypto' %}
-                                                        ${{ "%.4f"|format(stock.support_levels[i]) }}
+                                                        ${{ "%.4f"|format(levels[i]) }}
                                                     {% else %}
-                                                        ${{ "%.2f"|format(stock.support_levels[i]) }}
+                                                        ${{ "%.2f"|format(levels[i]) }}
                                                     {% endif %}
                                                 </strong>
                                             </div>
