@@ -183,30 +183,37 @@ class StockAnalyzer:
     
     def _get_cached_data(self, ticker):
         """Get cached data for a ticker, or fetch if not available"""
-        with self._cache_lock:
-            # Check if we have cached data
-            if ticker in self._data_cache:
-                cached_data = self._data_cache[ticker]
-                # Check if cache is still valid (within expiry time)
-                if self._cache_timestamp and (datetime.now() - self._cache_timestamp).seconds < (self._cache_expiry_hours * 3600):
-                    return cached_data['history']
-            
-            # Cache miss or expired - fetch new data
-            try:
-                stock = yf.Ticker(ticker)
-                hist = stock.history(period="5y")
+        try:
+            with self._cache_lock:
+                # Check if we have cached data
+                if ticker in self._data_cache:
+                    cached_data = self._data_cache[ticker]
+                    # Check if cache is still valid (within expiry time)
+                    if self._cache_timestamp and (datetime.now() - self._cache_timestamp).seconds < (self._cache_expiry_hours * 3600):
+                        hist = cached_data.get('history')
+                        if hist is not None and not hist.empty:
+                            return hist
                 
-                if not hist.empty:
-                    self._data_cache[ticker] = {
-                        'history': hist,
-                        'timestamp': datetime.now()
-                    }
-                    return hist
-                else:
+                # Cache miss or expired - fetch new data
+                try:
+                    stock = yf.Ticker(ticker)
+                    hist = stock.history(period="5y")
+                    
+                    if not hist.empty:
+                        self._data_cache[ticker] = {
+                            'history': hist,
+                            'timestamp': datetime.now()
+                        }
+                        return hist
+                    else:
+                        logging.warning(f"No historical data available for {ticker}")
+                        return None
+                except Exception as e:
+                    logging.error(f"Error fetching data for {ticker}: {e}")
                     return None
-            except Exception as e:
-                logging.error(f"Error fetching data for {ticker}: {e}")
-                return None
+        except Exception as e:
+            logging.error(f"Critical error in _get_cached_data for {ticker}: {e}")
+            return None
     
     def _is_cache_valid(self):
         """Check if cache is still valid"""

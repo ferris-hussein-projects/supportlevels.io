@@ -129,7 +129,9 @@ def sort_stocks(results, sort_by='ticker', sort_order='asc'):
                 continue
         except Exception as e:
             logging.error(f"Error processing result in sort_stocks: {e}")
-            continue
+            # Remove the problematic result from the list
+            if result in results:
+                results.remove(result)
     
     # Filter out any None or invalid results
     valid_results = [r for r in results if r and isinstance(r, dict) and 'ticker' in r]
@@ -210,7 +212,12 @@ def index():
         # Sort results safely
         try:
             if results:  # Only sort if we have results
-                results = sort_stocks(results, sort_by, sort_order)
+                # Filter out any None or invalid results before sorting
+                valid_results = []
+                for result in results:
+                    if result and isinstance(result, dict) and 'ticker' in result:
+                        valid_results.append(result)
+                results = sort_stocks(valid_results, sort_by, sort_order)
         except Exception as sort_error:
             logging.error(f"Error sorting results: {sort_error}")
             results = []
