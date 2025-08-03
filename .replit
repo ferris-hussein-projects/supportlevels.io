@@ -22,3 +22,4 @@ args = "python app.py"
 
 [deployment]
 deploymentTarget = "cloudrun"
+run = ["sh", "-c", "python3 app.py"]
