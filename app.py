@@ -1,6 +1,6 @@
 import os
 import logging
-from flask import Flask, render_template, request, redirect, url_for, session, make_response, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, make_response, jsonify, flash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 import yfinance as yf
@@ -9,6 +9,7 @@ import json
 from datetime import datetime, timedelta
 from stock_analyzer import StockAnalyzer
 import uuid
+from functools import wraps
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -30,10 +31,12 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 db.init_app(app)
 
 # Import models after db initialization
-from models import UserSettings, StockPopularity, TopAssetConfiguration
+from models import User, UserSettings, StockPopularity, TopAssetConfiguration
 
 with app.app_context():
     db.create_all()
+    # Create default users
+    User.create_default_users()
 
 # Initialize stock analyzer
 analyzer = StockAnalyzer()
@@ -63,6 +66,34 @@ def get_or_create_session_id():
     if 'session_id' not in session:
         session['session_id'] = str(uuid.uuid4())
     return session['session_id']
+
+def login_required(f):
+    """Decorator to require login for protected routes"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    """Decorator to require admin privileges"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user or not user.is_admin:
+            flash('Admin access required.', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def get_current_user():
+    """Get current logged in user"""
+    if 'user_id' in session:
+        return User.query.get(session['user_id'])
+    return None
 
 def get_user_settings():
     """Get user settings from database"""
@@ -111,7 +142,35 @@ def sort_stocks(results, sort_by='ticker', sort_order='asc'):
 
 
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(username=username).first()
+        
+        if user and user.check_password(password):
+            session['user_id'] = user.id
+            session['username'] = user.username
+            session['is_admin'] = user.is_admin
+            flash(f'Welcome, {user.username}!', 'success')
+            return redirect(url_for('index'))
+        else:
+            flash('Invalid username or password.', 'error')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """Logout user"""
+    session.clear()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def index():
     """Main page showing stocks approaching support levels"""
     settings = get_user_settings()
@@ -201,6 +260,7 @@ def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}, 200
 
 @app.route('/analysis')
+@login_required
 def analysis():
     """Main page showing stocks approaching support levels"""
     settings = get_user_settings()
@@ -309,6 +369,7 @@ def api_get_favorites():
         return {"favorites": []}, 500
 
 @app.route('/stock/<ticker>')
+@login_required
 def stock_detail(ticker):
     """Detailed analysis page for individual stock or crypto"""
     try:
@@ -341,6 +402,7 @@ def stock_detail(ticker):
                              error="Unable to fetch detailed stock data. Please try again later.")
 
 @app.route('/search', methods=['POST'])
+@login_required
 def search_stock():
     """Search for a specific stock"""
     ticker = request.form.get('ticker', '').upper().strip()
@@ -349,6 +411,7 @@ def search_stock():
     return redirect(url_for('index'))
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
     """Dashboard with summary statistics and market overview"""
     try:
@@ -366,6 +429,7 @@ def dashboard():
                              error="Unable to fetch dashboard data. Please try again later.")
 
 @app.route('/compare')
+@login_required
 def compare():
     """Stock comparison page"""
     tickers = request.args.getlist('tickers')
@@ -386,6 +450,7 @@ def compare():
                          comparison_data=comparison_data)
 
 @app.route('/admin')
+@admin_required
 def admin():
     """Admin dashboard for managing top assets"""
     try:
@@ -414,6 +479,7 @@ def admin():
         return render_template('admin.html', error="Unable to load admin data")
 
 @app.route('/admin/update_top_stocks', methods=['POST'])
+@admin_required
 def admin_update_top_stocks():
     """Update top stocks configuration"""
     try:
@@ -442,6 +508,7 @@ def admin_update_top_stocks():
         return {"success": False, "error": str(e)}
 
 @app.route('/admin/update_top_crypto', methods=['POST'])
+@admin_required
 def admin_update_top_crypto():
     """Update top crypto configuration"""
     try:
@@ -471,6 +538,7 @@ def admin_update_top_crypto():
         return {"success": False, "error": str(e)}
 
 @app.route('/admin/reset_defaults', methods=['POST'])
+@admin_required
 def admin_reset_defaults():
     """Reset to default configurations"""
     try:
@@ -496,6 +564,7 @@ def admin_reset_defaults():
         return {"success": False, "error": str(e)}
 
 @app.route('/settings', methods=['GET', 'POST'])
+@login_required
 def settings():
     """Settings page for configuring thresholds and preferences"""
     settings = get_user_settings()
@@ -529,6 +598,7 @@ def settings():
     return render_template('settings.html', settings=settings, all_sectors=all_filters)
 
 @app.route('/export/csv')
+@login_required
 def export_csv():
     """Export current support data as CSV"""
     try:

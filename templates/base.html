@@ -55,11 +55,13 @@
                             <i data-feather="bar-chart-2" class="me-1"></i>Compare
                         </a>
                     </li>
+                    {% if session.get('is_admin') %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('admin') }}">
                             <i data-feather="settings" class="me-1"></i>Admin
                         </a>
                     </li>
+                    {% endif %}
                 </ul>
 
                 <!-- Search Form -->
@@ -75,14 +77,29 @@
                 <ul class="navbar-nav">
                     <li class="nav-item">
                         <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="{{ url_for('settings') }}">
-                            <i data-feather="settings"></i>
+                            <i data-feather="settings" class="me-1"></i>Settings
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('settings') }}">
-                            <i class="fas fa-cog"></i> Settings
+                    {% if session.get('username') %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i data-feather="user" class="me-1"></i>
+                            {{ session.get('username') }}
+                            {% if session.get('is_admin') %}
+                                <span class="badge bg-warning text-dark ms-1">Admin</span>
+                            {% endif %}
                         </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('settings') }}">
+                                <i data-feather="settings" class="me-2"></i>Settings
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">
+                                <i data-feather="log-out" class="me-2"></i>Logout
+                            </a></li>
+                        </ul>
                     </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
