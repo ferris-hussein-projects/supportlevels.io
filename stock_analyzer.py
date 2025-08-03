@@ -729,7 +729,6 @@ class StockAnalyzer:
                 return {'error': 'No valid data found for the selected stocks'}
 
             return {
-                'Halal status is now included in the stock analysis results.
                 'stocks': comparison_data,
                 'comparison_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
