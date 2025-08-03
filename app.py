@@ -267,6 +267,11 @@ def analysis():
     sector_filter = request.args.get('sector', settings.sector_filter or 'All')
     level_type = request.args.get('level_type', settings.level_type or 'support')
     
+    # Performance optimization: early return for health checks
+    user_agent = request.headers.get('User-Agent', '')
+    if 'bot' in user_agent.lower() or 'check' in user_agent.lower():
+        return {"status": "ok"}, 200
+    
     try:
         # Import managers here to avoid circular imports
         from sector_data import sector_manager

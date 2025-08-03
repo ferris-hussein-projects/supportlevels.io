@@ -110,6 +110,13 @@
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
     <!-- Footer -->
     <footer class="text-center py-4 text-muted">
         <div class="container">
@@ -139,7 +146,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize feather icons
             feather.replace();
-            
+
             // Load favorites after DOM is ready
             if (typeof loadFavoriteStatuses === 'function') {
                 loadFavoriteStatuses();
@@ -151,6 +158,49 @@
             // Replace feather icons again in case some were added dynamically
             feather.replace();
         });
+    </script>
+
+    <!-- Custom JavaScript -->
+    <script>
+        // Initialize Feather icons
+        feather.replace();
+
+        // Auto-hide alerts after 5 seconds
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function(alert) {
+                alert.style.transition = 'opacity 0.5s ease-out';
+                alert.style.opacity = '0';
+                setTimeout(function() {
+                    alert.remove();
+                }, 500);
+            });
+        }, 5000);
+
+        // Show loading spinner on form submissions and navigation
+        document.addEventListener('DOMContentLoaded', function() {
+            const forms = document.querySelectorAll('form');
+            const links = document.querySelectorAll('a[href*="analysis"]');
+
+            forms.forEach(form => {
+                form.addEventListener('submit', function() {
+                    showLoadingSpinner();
+                });
+            });
+
+            links.forEach(link => {
+                link.addEventListener('click', function() {
+                    showLoadingSpinner();
+                });
+            });
+        });
+
+        function showLoadingSpinner() {
+            const spinner = document.getElementById('loadingSpinner');
+            if (spinner) {
+                spinner.style.display = 'block';
+            }
+        }
     </script>
 
     {% block scripts %}{% endblock %}

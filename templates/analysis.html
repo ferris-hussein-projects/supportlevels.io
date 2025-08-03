@@ -26,7 +26,7 @@
         color: #ffc107;
     }
 </style>
-    
+
 
     <div class="container my-4">
         <div class="row mb-4">
@@ -121,6 +121,14 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="loadingSpinner" class="text-center my-5" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Analyzing market data...</p>
         </div>
 
         {% if error %}
@@ -222,8 +230,19 @@
                 <span class="badge {% if request.args.get('level_type') == 'resistance' %}bg-danger{% else %}bg-success{% endif %}">{{ results|length }} found</span>
             </div>
             <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover mb-0">
+                <!-- Results Table -->
+        <div class="table-responsive">
+            <!-- Pagination Info -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-muted">
+                    Showing {{ results|length }} assets near {{ level_type }} levels
+                    {% if results|length >= 15 %}
+                        <small>(limited for performance)</small>
+                    {% endif %}
+                </span>
+            </div>
+
+            <table class="table table-dark table-hover mb-0">
                         <thead>
                             <tr>
                                 <th>
@@ -393,7 +412,7 @@
     // Favorites functionality
     function toggleFavorite(ticker, assetType, button) {
         const isCurrentlyFavorited = button.classList.contains('favorited');
-        
+
         fetch('/api/toggle_favorite', {
             method: 'POST',
             headers: {

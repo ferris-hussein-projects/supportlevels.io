@@ -735,8 +735,8 @@ class StockAnalyzer:
                     if not favorite_tickers:
                         return results
 
-                    # Process favorite stocks (limit to 50 for performance)
-                    favorite_tickers = favorite_tickers[:50]
+                    # Process favorite stocks (limit to 20 for performance)
+                    favorite_tickers = favorite_tickers[:20]
                     for ticker in favorite_tickers:
                         try:
                             if ticker in self.ALL_SP500_TICKERS:  # Check against full S&P 500 list
@@ -770,16 +770,16 @@ class StockAnalyzer:
                     return results
 
             # Get stock results from top stocks only
-            tickers_to_check = self._top_stocks[:30]  # Limit to 30 for performance
+            tickers_to_check = self._top_stocks[:15]  # Reduce to 15 for better performance
             if sector_filter != 'All' and not sector_filter.startswith('Crypto'):
                 # Filter by stock sector
-                tickers_to_check = [ticker for ticker in self._top_stocks if self.get_stock_sector(ticker) == sector_filter][:20]
+                tickers_to_check = [ticker for ticker in self._top_stocks if self.get_stock_sector(ticker) == sector_filter][:10]
             elif sector_filter.startswith('Crypto'):
                 # Only crypto filter selected, skip stocks
                 tickers_to_check = []
 
-            # Process stocks in batches for better performance
-            batch_size = 10
+            # Process stocks in smaller batches for better performance
+            batch_size = 5
             for i in range(0, len(tickers_to_check), batch_size):
                 batch = tickers_to_check[i:i + batch_size]
                 for ticker in batch:

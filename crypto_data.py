@@ -751,8 +751,8 @@ class CryptoDataManager:
         """Get cryptocurrencies approaching support levels (from top crypto list only)"""
         results = []
 
-        # Use top crypto list for analysis (no filtering since all crypto is just "Crypto" now)
-        for symbol in self._top_crypto:
+        # Use top crypto list for analysis (limit to first 8 for performance)
+        for symbol in self._top_crypto[:8]:
             try:
                 result = self.check_crypto_support(symbol, threshold)
                 if not result['error'] and result['zones'] not in (None, '', '—'):
@@ -767,8 +767,8 @@ class CryptoDataManager:
         """Get cryptocurrencies approaching resistance levels (from top crypto list only)"""
         results = []
 
-        # Use top crypto list for analysis
-        for symbol in self._top_crypto:
+        # Use top crypto list for analysis (limit to first 8 for performance)
+        for symbol in self._top_crypto[:8]:
             try:
                 result = self.check_crypto_resistance(symbol, threshold)
                 if not result['error'] and result['zones'] not in (None, '', '—'):
