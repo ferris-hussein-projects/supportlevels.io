@@ -7,3 +7,15 @@ packages = ["glibcLocales", "xcodebuild", "zlib"]
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[workflows]
+runButton = "Flask App"
+
+[[workflows.workflow]]
+name = "Flask App"
+author = 45903748
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python app.py"
