@@ -107,21 +107,32 @@ def sort_stocks(results, sort_by='ticker', sort_order='asc'):
     
     # Add popularity scores to results
     for result in results:
-        if 'ticker' in result:
-            result['popularity'] = StockPopularity.get_popularity_score(result['ticker'])
-            # Calculate distance from nearest support level
-            try:
-                price = float(result.get('price', 0))
-                distances = []
-                if result.get('ma21'):
-                    distances.append(abs(price - float(result['ma21'])) / float(result['ma21']))
-                if result.get('ma50'):
-                    distances.append(abs(price - float(result['ma50'])) / float(result['ma50']))
-                if result.get('ma200'):
-                    distances.append(abs(price - float(result['ma200'])) / float(result['ma200']))
-                result['distance'] = min(distances) if distances else 0
-            except (ValueError, TypeError):
-                result['distance'] = 0
+        try:
+            if result and isinstance(result, dict) and 'ticker' in result:
+                result['popularity'] = StockPopularity.get_popularity_score(result['ticker'])
+                # Calculate distance from nearest support level
+                try:
+                    price = float(result.get('price', 0))
+                    distances = []
+                    if result.get('ma21'):
+                        distances.append(abs(price - float(result['ma21'])) / float(result['ma21']))
+                    if result.get('ma50'):
+                        distances.append(abs(price - float(result['ma50'])) / float(result['ma50']))
+                    if result.get('ma200'):
+                        distances.append(abs(price - float(result['ma200'])) / float(result['ma200']))
+                    result['distance'] = min(distances) if distances else 0
+                except (ValueError, TypeError):
+                    result['distance'] = 0
+            else:
+                # Skip invalid results
+                logging.warning(f"Invalid result in sort_stocks: {result}")
+                continue
+        except Exception as e:
+            logging.error(f"Error processing result in sort_stocks: {e}")
+            continue
+    
+    # Filter out any None or invalid results
+    valid_results = [r for r in results if r and isinstance(r, dict) and 'ticker' in r]
     
     # Define sort key
     if sort_by == 'price':
@@ -134,7 +145,7 @@ def sort_stocks(results, sort_by='ticker', sort_order='asc'):
         key_func = lambda x: x.get('ticker', '')
     
     reverse = sort_order == 'desc'
-    return sorted(results, key=key_func, reverse=reverse)
+    return sorted(valid_results, key=key_func, reverse=reverse)
 
 
 
