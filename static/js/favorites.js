@@ -1,122 +1,103 @@
-// Favorites management
-let favorites = [];
-
-// Function to toggle favorite status
-function toggleFavorite(ticker, assetType = 'stock', buttonElement = null) {
-    fetch('/api/toggle_favorite', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            ticker: ticker,
-            asset_type: assetType,
-            action: favorites.includes(ticker) ? 'remove' : 'add'
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Update local favorites array
-            if (favorites.includes(ticker)) {
-                favorites = favorites.filter(t => t !== ticker);
-            } else {
-                favorites.push(ticker);
-            }
-
-            // Update button appearance if provided
-            if (buttonElement) {
-                updateFavoriteButton(buttonElement, ticker);
-            } else {
-                // Update all buttons for this ticker
-                updateAllFavoriteButtons(ticker);
-            }
-        } else {
-            console.error('Failed to toggle favorite:', data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Error toggling favorite:', error);
-    });
-}
-
-// Function to update a single favorite button
-function updateFavoriteButton(button, ticker) {
-    const isFavorite = favorites.includes(ticker);
-
-    if (isFavorite) {
-        button.classList.add('favorited');
-        button.style.color = '#ffc107';
-    } else {
-        button.classList.remove('favorited');
-        button.style.color = '';
+// Favorites functionality
+class FavoriteManager {
+    constructor() {
+        this.favorites = new Set();
+        this.loadFavorites();
     }
 
-    const icon = button.querySelector('i');
-    if (icon) {
-        icon.setAttribute('data-feather', 'star');
-        if (typeof feather !== 'undefined') {
-            feather.replace();
+    async loadFavorites() {
+        try {
+            const response = await fetch('/api/get_favorites');
+            const data = await response.json();
+            this.favorites = new Set(data.favorites || []);
+            this.updateFavoriteButtons();
+        } catch (error) {
+            console.error('Error loading favorites:', error);
         }
     }
-}
 
-// Function to update all favorite buttons for a ticker
-function updateAllFavoriteButtons(ticker) {
-    document.querySelectorAll('.favorite-btn').forEach(btn => {
-        const onclickAttr = btn.getAttribute('onclick');
-        if (onclickAttr && onclickAttr.includes(`'${ticker}'`)) {
-            updateFavoriteButton(btn, ticker);
-        }
-    });
-}
+    async toggleFavorite(ticker, assetType = 'stock') {
+        const isFavorite = this.favorites.has(ticker);
+        const action = isFavorite ? 'remove' : 'add';
 
-// Function to load and display favorite statuses
-function loadFavoriteStatuses() {
-    fetch('/api/get_favorites')
-        .then(response => response.json())
-        .then(data => {
-            const favorites = data.favorites || [];
-
-            // Update favorite button states
-            document.querySelectorAll('.favorite-btn').forEach(btn => {
-                try {
-                    const ticker = btn.getAttribute('data-ticker') || btn.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
-                    if (ticker) {
-                        const isFavorite = favorites.includes(ticker);
-                        if (btn.classList) {
-                            btn.classList.toggle('favorited', isFavorite);
-                        }
-                        btn.style.color = isFavorite ? '#ffc107' : '';
-                        btn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
-                    }
-                } catch (error) {
-                    console.error('Error updating favorite button:', error);
-                }
+        try {
+            const response = await fetch('/api/toggle_favorite', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ticker: ticker,
+                    asset_type: assetType,
+                    action: action
+                })
             });
-        })
-        .catch(error => {
-            console.error('Error loading favorites:', error);
-        });
-}
 
-// Define loadFavoriteStatuses function
-function loadFavoriteStatuses() {
-    loadFavorites();
-}
-        .catch(error => {
-            console.error('Error loading favorites:', error);
-        });
-}
-
-// Load favorite statuses on page load
-document.addEventListener('DOMContentLoaded', function() {
-    // Only load favorites if we have favorite buttons on the page
-    if (document.querySelectorAll('.favorite-btn').length > 0) {
-        loadFavoriteStatuses();
+            const result = await response.json();
+            if (result.success) {
+                if (action === 'add') {
+                    this.favorites.add(ticker);
+                } else {
+                    this.favorites.delete(ticker);
+                }
+                this.updateFavoriteButtons();
+                return true;
+            }
+        } catch (error) {
+            console.error('Error toggling favorite:', error);
+        }
+        return false;
     }
-});
 
-// Export functions for global use
-window.toggleFavorite = toggleFavorite;
-window.loadFavoriteStatuses = loadFavoriteStatuses;
+    updateFavoriteButtons() {
+        document.querySelectorAll('[data-ticker]').forEach(button => {
+            const ticker = button.dataset.ticker;
+            const icon = button.querySelector('i');
+            const isFavorite = this.favorites.has(ticker);
+
+            if (icon) {
+                icon.className = isFavorite ? 'fas fa-heart text-danger' : 'far fa-heart text-muted';
+            }
+
+            button.title = isFavorite ? `Remove ${ticker} from favorites` : `Add ${ticker} to favorites`;
+        });
+    }
+
+    isFavorite(ticker) {
+        return this.favorites.has(ticker);
+    }
+}
+
+// Global instance
+let favoriteManager;
+
+// Global functions for backward compatibility
+function loadFavoriteStatuses() {
+    if (favoriteManager) {
+        favoriteManager.loadFavorites();
+    }
+}
+
+function toggleFavorite(ticker, assetType = 'stock') {
+    if (favoriteManager) {
+        return favoriteManager.toggleFavorite(ticker, assetType);
+    }
+    return false;
+}
+
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize favorite manager
+    favoriteManager = new FavoriteManager();
+
+    // Set up favorite button click handlers
+    document.addEventListener('click', function(e) {
+        const favoriteBtn = e.target.closest('[data-ticker]');
+        if (favoriteBtn && favoriteBtn.classList.contains('favorite-btn')) {
+            e.preventDefault();
+            const ticker = favoriteBtn.dataset.ticker;
+            const assetType = favoriteBtn.dataset.assetType || 'stock';
+            favoriteManager.toggleFavorite(ticker, assetType);
+        }
+    });
+});

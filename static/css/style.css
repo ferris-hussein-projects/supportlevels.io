@@ -1,0 +1,66 @@
+
+/* Additional styles for Stock Support Tracker */
+
+/* Fix for any missing styles */
+.text-info {
+    color: #17a2b8 !important;
+}
+
+.text-success {
+    color: #28a745 !important;
+}
+
+.text-danger {
+    color: #dc3545 !important;
+}
+
+.text-warning {
+    color: #ffc107 !important;
+}
+
+.text-muted {
+    color: #6c757d !important;
+}
+
+/* Favorite button styles */
+.favorite-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 0.25rem;
+}
+
+.favorite-btn:hover {
+    transform: scale(1.1);
+    transition: transform 0.2s ease;
+}
+
+/* Asset type badges */
+.badge {
+    font-size: 0.75em;
+    padding: 0.35em 0.65em;
+}
+
+/* Loading states */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Chart container */
+.chart-container {
+    position: relative;
+    height: 400px;
+    width: 100%;
+}
+
+/* Responsive table */
+.table-responsive {
+    border-radius: 0.375rem;
+}
+
+/* Card hover effects */
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    transition: box-shadow 0.15s ease-in-out;
+}
