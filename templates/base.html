@@ -153,37 +153,65 @@
     </script>
 
     <script>
-    // Define missing functions
-    function toggleFavorite(event) {
-        // Toggle favorite functionality placeholder
-        const button = event.target.closest('.favorite-btn');
-        if (button) {
-            button.classList.toggle('favorited');
-        }
-    }
-
-    function loadFavoriteStatuses() {
-        // Load favorite statuses placeholder
-        const favoriteButtons = document.querySelectorAll('.favorite-btn');
-        favoriteButtons.forEach(button => {
-            // Add your favorite loading logic here if needed
-        });
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
         feather.replace();
 
-        // Initialize favorite buttons
-        const favoriteButtons = document.querySelectorAll('.favorite-btn');
-        if (favoriteButtons) {
-            favoriteButtons.forEach(button => {
-                button.addEventListener('click', toggleFavorite);
-            });
+        // Initialize tooltips if Bootstrap 5 is being used
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
 
-            // Load favorite status for visible tickers
-            loadFavoriteStatuses();
+        // Favorites functionality
+        function loadFavoriteStatuses() {
+            fetch('/api/get_favorites')
+                .then(response => response.json())
+                .then(data => {
+                    const favorites = data.favorites || [];
+                    favorites.forEach(ticker => {
+                        const heartIcon = document.querySelector(`[data-ticker="${ticker}"] .heart-icon`);
+                        if (heartIcon && heartIcon.classList) {
+                            heartIcon.classList.add('favorited');
+                        }
+                    });
+                })
+                .catch(error => console.log('Could not load favorites:', error));
         }
-    });
+
+        function toggleFavorite(ticker, assetType = 'stock') {
+            const heartIcon = document.querySelector(`[data-ticker="${ticker}"] .heart-icon`);
+            if (!heartIcon || !heartIcon.classList) return;
+
+            const isFavorited = heartIcon.classList.contains('favorited');
+            const action = isFavorited ? 'remove' : 'add';
+
+            fetch('/api/toggle_favorite', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ticker: ticker,
+                    asset_type: assetType,
+                    action: action
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (action === 'add') {
+                        heartIcon.classList.add('favorited');
+                    } else {
+                        heartIcon.classList.remove('favorited');
+                    }
+                }
+            })
+            .catch(error => console.log('Could not toggle favorite:', error));
+        }
+
+        // Load favorites on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadFavoriteStatuses();
+        });
     </script>
 
     {% block scripts %}{% endblock %}
