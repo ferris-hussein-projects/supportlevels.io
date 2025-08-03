@@ -34,7 +34,7 @@
                 Stock Support Tracker
             </a>
 
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
@@ -135,19 +135,21 @@
     <script src="{{ url_for('static', filename='js/favorites.js') }}"></script>
 
     <script>
-        // Initialize Feather icons
+        // Initialize Feather icons and ensure proper loading
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize feather icons
             feather.replace();
+            
+            // Load favorites after DOM is ready
+            if (typeof loadFavoriteStatuses === 'function') {
+                loadFavoriteStatuses();
+            }
         });
 
-        // Additional initialization for favorites (redundant safety check)
+        // Backup initialization
         window.addEventListener('load', function() {
-            // Small delay to ensure favorites.js is fully loaded
-            setTimeout(function() {
-                if (window.loadFavoriteStatuses && typeof window.loadFavoriteStatuses === 'function') {
-                    window.loadFavoriteStatuses();
-                }
-            }, 100);
+            // Replace feather icons again in case some were added dynamically
+            feather.replace();
         });
     </script>
 

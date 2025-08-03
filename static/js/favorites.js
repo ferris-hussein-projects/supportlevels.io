@@ -21,9 +21,23 @@ function loadUserFavorites() {
         });
 }
 
+// Function to load favorite statuses
 function loadFavoriteStatuses() {
-    // Load and update favorite status for all buttons
-    loadUserFavorites();
+    fetch('/api/get_favorites')
+        .then(response => response.json())
+        .then(data => {
+            const favorites = data.favorites || [];
+            // Update UI with favorite statuses
+            favorites.forEach(ticker => {
+                const favoriteBtn = document.querySelector(`button[onclick*="${ticker}"]`);
+                if (favoriteBtn && favoriteBtn.classList) {
+                    favoriteBtn.classList.add('favorited');
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error loading favorites:', error);
+        });
 }
 
 function toggleFavorite(ticker, assetType = 'stock') {
