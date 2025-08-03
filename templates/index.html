@@ -183,8 +183,7 @@
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead class="table-dark">
-                            <tr>
-                                <th>
+                            <th>
                                     <a href="?sort=ticker&order={{ 'desc' if sort_by == 'ticker' and sort_order == 'asc' else 'asc' }}{% if sector_filter and sector_filter != 'All' %}&sector={{ sector_filter }}{% endif %}" 
                                        class="text-decoration-none text-white">
                                         Ticker {% if sort_by == 'ticker' %}{% if sort_order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}
@@ -200,6 +199,9 @@
                                     </a>
                                 </th>
                                 <th>Support Zone(s)</th>
+                                <th>Support Timeframes</th>
+                                <th>Support Prices</th>
+                                <th>Halal</th>
                                 <th>
                                     <a href="?sort=popularity&order={{ 'desc' if sort_by == 'popularity' and sort_order == 'asc' else 'asc' }}{% if sector_filter and sector_filter != 'All' %}&sector={{ sector_filter }}{% endif %}" 
                                        class="text-decoration-none text-white">
@@ -246,6 +248,18 @@
                                 </td>
                                 <td>
                                     <span class="badge bg-warning">{{ stock.zones }}</span>
+                                </td>
+                                <td>
+                                    <strong class="text-success">{{ stock.support_prices or '—' }}</strong>
+                                </td>
+                                <td>
+                                    {% if stock.asset_type == 'crypto' %}
+                                        <span class="badge bg-success">✓ Halal</span>
+                                    {% elif stock.is_halal %}
+                                        <span class="badge bg-success">✓ Halal</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">⚠ Non-Halal</span>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <div class="d-flex align-items-center">
@@ -300,7 +314,7 @@
 // Set last updated time
 document.addEventListener('DOMContentLoaded', function() {
     feather.replace();
-    
+
     // Set current time for last updated
     const lastUpdatedElement = document.getElementById('lastUpdated');
     if (lastUpdatedElement) {

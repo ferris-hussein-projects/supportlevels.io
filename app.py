@@ -532,20 +532,33 @@ def settings():
 def export_csv():
     """Export current support data as CSV"""
     try:
-        threshold = float(session.get('threshold', 0.03))
-        results = analyzer.get_stocks_near_support(threshold)
+        settings = get_user_settings()
+        threshold = settings.threshold / 100.0
+        sector_filter = request.args.get('sector', settings.sector_filter or 'All')
         
-        # Create CSV content
-        csv_content = "Ticker,Price,Support Zones,21-day MA,50-day MA,200-day MA,RSI,Volume\n"
+        # Get the same results as displayed on the page
+        results = analyzer.get_stocks_near_support(threshold, sector_filter, include_crypto=True)
+        
+        # Create CSV content with all support levels and halal status
+        csv_content = "Ticker,Company Name,Asset Type,Sector,Price,Support Zones,Support Prices,1M Support,6M Support,1Y Support,5Y Support,Is Halal,Volume\n"
         
         for result in results:
-            ticker = result['ticker']
-            detailed = analyzer.get_detailed_analysis(ticker)
+            # Format halal status
+            if result.get('asset_type') == 'crypto':
+                halal_status = "Yes (Crypto)"
+            elif result.get('is_halal'):
+                halal_status = "Yes"
+            else:
+                halal_status = "No"
             
-            if not detailed.get('error'):
-                csv_content += f"{result['ticker']},{result['price']},\"{result['zones']}\","
-                csv_content += f"{detailed.get('ma21', '')},{detailed.get('ma50', '')},{detailed.get('ma200', '')},"
-                csv_content += f"{detailed.get('rsi', '')},{detailed.get('volume', '')}\n"
+            # Escape quotes in company name and support zones
+            company_name = (result.get('company_name', result['ticker']) or result['ticker']).replace('"', '""')
+            zones = (result.get('zones', '') or '').replace('"', '""')
+            support_prices = (result.get('support_prices', '') or '').replace('"', '""')
+            
+            csv_content += f'"{result["ticker"]}","{company_name}","{result.get("asset_type", "stock").title()}","{result.get("sector", "Other")}",{result["price"]},"{zones}","{support_prices}",'
+            csv_content += f'{result.get("support_1m", "")},{result.get("support_6m", "")},{result.get("support_1y", "")},{result.get("support_5y", "")},'
+            csv_content += f'"{halal_status}",{result.get("volume", "")}\n'
         
         # Create response
         response = make_response(csv_content)

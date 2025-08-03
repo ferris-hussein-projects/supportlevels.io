@@ -135,6 +135,23 @@
         });
     </script>
 
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        feather.replace();
+
+        // Initialize favorite buttons
+        const favoriteButtons = document.querySelectorAll('.favorite-btn');
+        if (favoriteButtons) {
+            favoriteButtons.forEach(button => {
+                button.addEventListener('click', toggleFavorite);
+            });
+
+            // Load favorite status for visible tickers
+            loadFavoriteStatuses();
+        }
+    });
+    </script>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>
