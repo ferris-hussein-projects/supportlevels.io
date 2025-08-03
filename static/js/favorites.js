@@ -71,12 +71,12 @@ function updateAllFavoriteButtons(ticker) {
     });
 }
 
-// Function to load favorite statuses from server
+// Function to load and display favorite statuses
 function loadFavoriteStatuses() {
     fetch('/api/get_favorites')
         .then(response => response.json())
         .then(data => {
-            favorites = data.favorites || [];
+            const favorites = data.favorites || [];
 
             // Update favorite button states
             document.querySelectorAll('.favorite-btn').forEach(btn => {
@@ -102,7 +102,10 @@ function loadFavoriteStatuses() {
 
 // Load favorite statuses on page load
 document.addEventListener('DOMContentLoaded', function() {
-    loadFavoriteStatuses();
+    // Only load favorites if we have favorite buttons on the page
+    if (document.querySelectorAll('.favorite-btn').length > 0) {
+        loadFavoriteStatuses();
+    }
 });
 
 // Export functions for global use

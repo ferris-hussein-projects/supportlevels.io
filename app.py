@@ -103,55 +103,73 @@ def get_user_settings():
 def sort_stocks(results, sort_by='ticker', sort_order='asc'):
     """Sort stock results by specified criteria"""
     if not results:
-        return results
+        return []
     
     # Filter out any None or invalid results first
     valid_results = []
     
-    # Add popularity scores to results
-    for i, result in enumerate(results):
-        try:
-            if result and isinstance(result, dict) and 'ticker' in result:
-                # Make a copy to avoid modifying the original
-                result_copy = result.copy()
-                result_copy['popularity'] = StockPopularity.get_popularity_score(result_copy['ticker'])
-                
-                # Calculate distance from nearest support level
-                try:
-                    price = float(result_copy.get('price', 0))
-                    distances = []
-                    if result_copy.get('ma21'):
-                        distances.append(abs(price - float(result_copy['ma21'])) / float(result_copy['ma21']))
-                    if result_copy.get('ma50'):
-                        distances.append(abs(price - float(result_copy['ma50'])) / float(result_copy['ma50']))
-                    if result_copy.get('ma200'):
-                        distances.append(abs(price - float(result_copy['ma200'])) / float(result_copy['ma200']))
-                    result_copy['distance'] = min(distances) if distances else 0
-                except (ValueError, TypeError):
-                    result_copy['distance'] = 0
-                
-                # Add to valid results only if processing was successful
-                valid_results.append(result_copy)
-            else:
-                # Skip invalid results
-                logging.warning(f"Invalid result at index {i} in sort_stocks: {result}")
+    try:
+        # Add popularity scores to results
+        for i, result in enumerate(results):
+            try:
+                if result and isinstance(result, dict) and 'ticker' in result:
+                    # Make a copy to avoid modifying the original
+                    result_copy = result.copy()
+                    
+                    # Safely get popularity score
+                    try:
+                        result_copy['popularity'] = StockPopularity.get_popularity_score(result_copy['ticker'])
+                    except Exception:
+                        result_copy['popularity'] = 0
+                    
+                    # Calculate distance from nearest support level
+                    try:
+                        price = float(result_copy.get('price', 0))
+                        distances = []
+                        if result_copy.get('ma21'):
+                            distances.append(abs(price - float(result_copy['ma21'])) / float(result_copy['ma21']))
+                        if result_copy.get('ma50'):
+                            distances.append(abs(price - float(result_copy['ma50'])) / float(result_copy['ma50']))
+                        if result_copy.get('ma200'):
+                            distances.append(abs(price - float(result_copy['ma200'])) / float(result_copy['ma200']))
+                        result_copy['distance'] = min(distances) if distances else 0
+                    except (ValueError, TypeError):
+                        result_copy['distance'] = 0
+                    
+                    # Add to valid results only if processing was successful
+                    valid_results.append(result_copy)
+                else:
+                    # Skip invalid results
+                    logging.warning(f"Invalid result at index {i} in sort_stocks: {result}")
+                    continue
+            except Exception as e:
+                logging.error(f"Error processing result at index {i} in sort_stocks: {e}")
                 continue
-        except Exception as e:
-            logging.error(f"Error processing result at index {i} in sort_stocks: {e}")
-            continue
-    
-    # Define sort key
-    if sort_by == 'price':
-        key_func = lambda x: float(x.get('price', 0))
-    elif sort_by == 'popularity':
-        key_func = lambda x: x.get('popularity', 0)
-    elif sort_by == 'distance':
-        key_func = lambda x: x.get('distance', 0)
-    else:  # ticker
-        key_func = lambda x: x.get('ticker', '')
-    
-    reverse = sort_order == 'desc'
-    return sorted(valid_results, key=key_func, reverse=reverse)
+        
+        # If no valid results, return empty list
+        if not valid_results:
+            return []
+        
+        # Define sort key with safe defaults
+        try:
+            if sort_by == 'price':
+                key_func = lambda x: float(x.get('price', 0)) if x.get('price') is not None else 0
+            elif sort_by == 'popularity':
+                key_func = lambda x: x.get('popularity', 0)
+            elif sort_by == 'distance':
+                key_func = lambda x: x.get('distance', 0)
+            else:  # ticker
+                key_func = lambda x: str(x.get('ticker', '')).upper()
+            
+            reverse = sort_order == 'desc'
+            return sorted(valid_results, key=key_func, reverse=reverse)
+        except Exception as sort_error:
+            logging.error(f"Error in sorting logic: {sort_error}")
+            return valid_results  # Return unsorted valid results
+            
+    except Exception as e:
+        logging.error(f"Critical error in sort_stocks: {e}")
+        return results if results else []
 
 
 
@@ -200,12 +218,14 @@ def index():
         
         # Get stocks and crypto near support/resistance with filtering
         results = []
+        data_fetch_error = None
         try:
             results = analyzer.get_stocks_near_levels(support_threshold, resistance_threshold, level_type, sector_filter, include_crypto=True)
             if not results:
                 results = []
         except Exception as data_error:
             logging.error(f"Error fetching stock data: {data_error}")
+            data_fetch_error = str(data_error)
             results = []
         
         # Debug logging
@@ -222,9 +242,13 @@ def index():
                     if result and isinstance(result, dict) and 'ticker' in result:
                         valid_results.append(result)
                 results = sort_stocks(valid_results, sort_by, sort_order)
+                if results is None:  # If sort_stocks returns None due to error
+                    results = valid_results  # Use unsorted valid results
         except Exception as sort_error:
             logging.error(f"Error sorting results: {sort_error}")
-            results = []
+            # Don't clear results, just use them unsorted
+            if not results:
+                results = []
         
         # Get summary statistics with error handling
         try:
