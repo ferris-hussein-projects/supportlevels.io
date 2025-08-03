@@ -187,6 +187,14 @@ def index():
         # Get stocks and crypto near support with filtering
         results = analyzer.get_stocks_near_support(threshold, sector_filter, include_crypto=True)
         
+        # Debug logging
+        logging.info(f"Threshold: {threshold}, Sector filter: {sector_filter}")
+        logging.info(f"Raw results count: {len(results) if results else 0}")
+        if results:
+            stock_count = sum(1 for r in results if r.get('asset_type', 'stock') == 'stock')
+            crypto_count = sum(1 for r in results if r.get('asset_type', 'stock') == 'crypto')
+            logging.info(f"Stock results: {stock_count}, Crypto results: {crypto_count}")
+        
         # Sort results
         results = sort_stocks(results, sort_by, sort_order)
         
@@ -258,6 +266,32 @@ def health_check():
     """Simple health check endpoint for deployment"""
     from datetime import datetime
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}, 200
+
+@app.route('/debug')
+@login_required  
+def debug():
+    """Debug endpoint to check analyzer status"""
+    try:
+        settings = get_user_settings()
+        threshold = settings.threshold / 100.0
+        
+        # Get basic analyzer info
+        top_stocks = analyzer.get_top_stocks()
+        all_results = analyzer.get_stocks_near_support(0.10, 'All', include_crypto=True)  # 10% threshold
+        
+        debug_info = {
+            'threshold_setting': settings.threshold,
+            'threshold_decimal': threshold,
+            'top_stocks_count': len(top_stocks),
+            'top_stocks_sample': top_stocks[:5],
+            'all_results_count': len(all_results) if all_results else 0,
+            'results_sample': all_results[:3] if all_results else [],
+            'analyzer_tickers_count': len(analyzer.TICKERS) if hasattr(analyzer, 'TICKERS') else 0
+        }
+        
+        return debug_info
+    except Exception as e:
+        return {'error': str(e)}
 
 @app.route('/analysis')
 @login_required
