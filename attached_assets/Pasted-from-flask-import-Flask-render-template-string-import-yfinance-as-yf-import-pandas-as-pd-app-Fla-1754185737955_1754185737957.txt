@@ -1,0 +1,85 @@
+from flask import Flask, render_template_string
+import yfinance as yf
+import pandas as pd
+
+app = Flask(__name__)
+
+# Threshold (3% by default) for flagging proximity to moving averages
+eps = 0.03
+
+# Dynamically load S&P 500 tickers (public large-cap proxy)
+def load_tickers():
+    try:
+        tables = pd.read_html(
+            'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+        )
+        df = tables[0]
+        return df['Symbol'].tolist()
+    except Exception:
+        # Fallback if fetch fails
+        return ['AAPL','MSFT','GOOGL','AMZN','META']
+
+TICKERS = load_tickers()
+
+def check_support(ticker):
+    hist = yf.Ticker(ticker).history(period="6mo")["Close"]
+    if len(hist) < 200:
+        return {'ticker': ticker, 'price': None, 'zones': 'Insufficient data'}
+
+    current = hist.iloc[-1]
+    ma21   = hist.rolling(window=21).mean().iloc[-1]
+    ma50   = hist.rolling(window=50).mean().iloc[-1]
+    ma200  = hist.rolling(window=200).mean().iloc[-1]
+
+    zones = []
+    if abs(current - ma21)  / ma21  <= eps: zones.append('21-day MA')
+    if abs(current - ma50)  / ma50  <= eps: zones.append('50-day MA')
+    if abs(current - ma200) / ma200 <= eps: zones.append('200-day MA')
+
+    return {
+      'ticker': ticker,
+      'price': round(current, 2),
+      'zones': ', '.join(zones) or '—'
+    }
+
+@app.route('/')
+def index():
+    # Only keep tickers near support
+    results = [
+      r for r in (check_support(t) for t in TICKERS)
+      if r['zones'] not in (None, '', '—')
+    ]
+    return render_template_string('''
+<!doctype html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fortune 500 Support Tracker</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+        rel="stylesheet">
+</head>
+<body class="p-3">
+  <div class="container">
+    <h1 class="mb-4">Stocks Approaching Support</h1>
+    <table class="table table-hover">
+      <thead>
+        <tr><th>Ticker</th><th>Price</th><th>Support Zone(s)</th></tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr>
+          <td>{{ r.ticker }}</td>
+          <td>{{ r.price }}</td>
+          <td>{{ r.zones }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="small text-muted">Threshold: {{ eps*100 }}%</p>
+  </div>
+</body>
+</html>
+''', results=results, eps=eps)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)

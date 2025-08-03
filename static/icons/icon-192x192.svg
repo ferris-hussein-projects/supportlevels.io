@@ -1,0 +1,11 @@
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" rx="24" fill="#007bff"/>
+  <path d="M48 144V96L72 72L96 96L120 48L144 72V144H48Z" stroke="white" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="72" cy="72" r="4" fill="white"/>
+  <circle cx="96" cy="96" r="4" fill="white"/>
+  <circle cx="120" cy="48" r="4" fill="white"/>
+  <circle cx="144" cy="72" r="4" fill="white"/>
+  <path d="M48 120H144" stroke="white" stroke-width="2" stroke-dasharray="4 4" opacity="0.6"/>
+  <path d="M48 96H144" stroke="white" stroke-width="2" stroke-dasharray="4 4" opacity="0.4"/>
+  <text x="96" y="172" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="14" font-weight="bold">STOCKS</text>
+</svg>

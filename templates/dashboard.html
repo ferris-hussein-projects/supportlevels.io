@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Stock Support Tracker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0">
+                <i data-feather="bar-chart-2" class="me-2"></i>
+                Market Dashboard
+            </h1>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                    <i data-feather="list" class="me-1"></i>Support List
+                </a>
+                <button class="btn btn-outline-secondary" onclick="location.reload()">
+                    <i data-feather="refresh-cw" class="me-1"></i>Refresh
+                </button>
+            </div>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-danger" role="alert">
+            <i data-feather="alert-circle" class="me-2"></i>
+            {{ error }}
+        </div>
+        {% elif data %}
+
+        <!-- Market Overview -->
+        {% if data.market_indices %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="trending-up" class="me-2"></i>
+                    Market Indices
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for index, index_data in data.market_indices.items() %}
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <h6 class="text-muted">
+                                {% if index == '^GSPC' %}S&P 500
+                                {% elif index == '^DJI' %}Dow Jones
+                                {% elif index == '^IXIC' %}NASDAQ
+                                {% else %}{{ index }}{% endif %}
+                            </h6>
+                            <h4>{{ "{:,.2f}".format(index_data.value) }}</h4>
+                            <span class="badge {% if index_data.change >= 0 %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ "%.2f"|format(index_data.change) }}%
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Summary Statistics -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">
+                            <i data-feather="database" class="me-2"></i>
+                            Total Stocks Tracked
+                        </h5>
+                        <h2 class="text-info">{{ data.total_stocks_tracked or 0 }}</h2>
+                        <p class="text-muted mb-0">S&P 500 companies</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">
+                            <i data-feather="target" class="me-2"></i>
+                            Near Support Levels
+                        </h5>
+                        <h2 class="text-warning">{{ data.stocks_near_support or 0 }}</h2>
+                        <p class="text-muted mb-0">
+                            {{ data.support_percentage or 0 }}% of tracked stocks
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">
+                            <i data-feather="percent" class="me-2"></i>
+                            Current Threshold
+                        </h5>
+                        <h2 class="text-success">{{ "%.1f"|format(threshold * 100) }}%</h2>
+                        <p class="text-muted mb-0">
+                            <a href="{{ url_for('settings') }}" class="text-decoration-none">Adjust</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sector Breakdown -->
+        {% if data.sector_breakdown %}
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i data-feather="pie-chart" class="me-2"></i>
+                            Sector Breakdown (Near Support)
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% for sector, count in data.sector_breakdown.items() %}
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>{{ sector }}</span>
+                            <div class="d-flex align-items-center">
+                                <div class="progress me-2" style="width: 100px; height: 8px;">
+                                    <div class="progress-bar" role="progressbar" 
+                                         style="width: {{ (count / data.stocks_near_support * 100) if data.stocks_near_support > 0 else 0 }}%">
+                                    </div>
+                                </div>
+                                <span class="badge bg-secondary">{{ count }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Support Stocks -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i data-feather="star" class="me-2"></i>
+                            Top Support Candidates
+                        </h5>
+                        <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-primary">
+                            View All
+                        </a>
+                    </div>
+                    <div class="card-body">
+                        {% if data.top_support_stocks %}
+                        <div class="list-group list-group-flush">
+                            {% for stock in data.top_support_stocks %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                <div>
+                                    <strong class="text-info">{{ stock.ticker }}</strong>
+                                    <div class="small text-muted">{{ stock.zones }}</div>
+                                </div>
+                                <div class="text-end">
+                                    <div><strong>${{ stock.price }}</strong></div>
+                                    <a href="{{ url_for('stock_detail', ticker=stock.ticker) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i data-feather="eye"></i>
+                                    </a>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center text-muted py-3">
+                            <i data-feather="search" class="mb-2"></i>
+                            <p>No stocks currently near support levels</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="zap" class="me-2"></i>
+                    Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-primary w-100 mb-2">
+                            <i data-feather="list" class="me-2"></i>
+                            View Support List
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('compare') }}" class="btn btn-outline-secondary w-100 mb-2">
+                            <i data-feather="bar-chart-2" class="me-2"></i>
+                            Compare Stocks
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('export_csv') }}" class="btn btn-outline-success w-100 mb-2">
+                            <i data-feather="download" class="me-2"></i>
+                            Export Data
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('settings') }}" class="btn btn-outline-warning w-100 mb-2">
+                            <i data-feather="settings" class="me-2"></i>
+                            Settings
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+});
+</script>
+{% endblock %}

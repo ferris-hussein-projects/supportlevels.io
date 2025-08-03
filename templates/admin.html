@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Manage Top Assets{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">
+                <i class="fas fa-cogs text-warning"></i> Admin Dashboard
+            </h1>
+            
+            {% if error %}
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> {{ error }}
+            </div>
+            {% endif %}
+            
+            <!-- Statistics Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body text-center">
+                            <h5>S&P 500 Available</h5>
+                            <h2>{{ total_sp500 }}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body text-center">
+                            <h5>Stocks Tracked</h5>
+                            <h2>{{ top_stocks|length }}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body text-center">
+                            <h5>Crypto Available</h5>
+                            <h2>{{ total_crypto_available }}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body text-center">
+                            <h5>Crypto Tracked</h5>
+                            <h2>{{ top_crypto|length }}</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stock Management -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5><i class="fas fa-chart-line text-success"></i> Top Stocks Management</h5>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="resetStocks()">
+                                <i class="fas fa-undo"></i> Reset to Default
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Current Top Stocks ({{ top_stocks|length }}):</label>
+                                <div class="border rounded p-2 mb-3" style="max-height: 200px; overflow-y: auto;">
+                                    <div id="current-stocks">
+                                        {% for stock in top_stocks %}
+                                        <span class="badge bg-success me-1 mb-1">{{ stock }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="stock-select" class="form-label">Add/Remove Stocks:</label>
+                                <select id="stock-select" class="form-select" multiple size="8">
+                                    {% for stock in all_sp500 %}
+                                    <option value="{{ stock }}" {% if stock in top_stocks %}selected{% endif %}>
+                                        {{ stock }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple stocks</small>
+                            </div>
+                            
+                            <button class="btn btn-primary" onclick="updateStocks()">
+                                <i class="fas fa-save"></i> Update Top Stocks
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Crypto Management -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5><i class="fas fa-bitcoin text-warning"></i> Top Crypto Management</h5>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="resetCrypto()">
+                                <i class="fas fa-undo"></i> Reset to Default
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Current Top Crypto ({{ top_crypto|length }}):</label>
+                                <div class="border rounded p-2 mb-3" style="max-height: 200px; overflow-y: auto;">
+                                    <div id="current-crypto">
+                                        {% for crypto in top_crypto %}
+                                        <span class="badge bg-warning me-1 mb-1">{{ crypto }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="crypto-select" class="form-label">Add/Remove Crypto:</label>
+                                <select id="crypto-select" class="form-select" multiple size="8">
+                                    {% for crypto in all_crypto %}
+                                    <option value="{{ crypto }}" {% if crypto in top_crypto %}selected{% endif %}>
+                                        {{ crypto }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple cryptocurrencies</small>
+                            </div>
+                            
+                            <button class="btn btn-warning" onclick="updateCrypto()">
+                                <i class="fas fa-save"></i> Update Top Crypto
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="row mt-4">
+                <div class="col-12 text-center">
+                    <a href="{{ url_for('analysis') }}" class="btn btn-outline-primary me-2">
+                        <i class="fas fa-chart-area"></i> View Analysis
+                    </a>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-info me-2">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                    <a href="{{ url_for('settings') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-cog"></i> Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alert Modal -->
+<div class="modal fade" id="alertModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="alertModalTitle">Notification</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="alertModalBody">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAlert(title, message, type = 'info') {
+    document.getElementById('alertModalTitle').textContent = title;
+    document.getElementById('alertModalBody').innerHTML = message;
+    
+    const modal = document.getElementById('alertModal');
+    const header = modal.querySelector('.modal-header');
+    header.className = `modal-header bg-${type === 'error' ? 'danger' : 'success'} text-white`;
+    
+    new bootstrap.Modal(modal).show();
+}
+
+function updateStocks() {
+    const select = document.getElementById('stock-select');
+    const selectedStocks = Array.from(select.selectedOptions).map(option => option.value);
+    
+    if (selectedStocks.length === 0) {
+        showAlert('Error', 'Please select at least one stock.', 'error');
+        return;
+    }
+    
+    fetch('/admin/update_top_stocks', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({stocks: selectedStocks})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Success', data.message, 'success');
+            updateStockBadges(selectedStocks);
+        } else {
+            showAlert('Error', data.error, 'error');
+        }
+    })
+    .catch(error => {
+        showAlert('Error', 'Network error: ' + error.message, 'error');
+    });
+}
+
+function updateCrypto() {
+    const select = document.getElementById('crypto-select');
+    const selectedCrypto = Array.from(select.selectedOptions).map(option => option.value);
+    
+    if (selectedCrypto.length === 0) {
+        showAlert('Error', 'Please select at least one cryptocurrency.', 'error');
+        return;
+    }
+    
+    fetch('/admin/update_top_crypto', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({crypto: selectedCrypto})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Success', data.message, 'success');
+            updateCryptoBadges(selectedCrypto);
+        } else {
+            showAlert('Error', data.error, 'error');
+        }
+    })
+    .catch(error => {
+        showAlert('Error', 'Network error: ' + error.message, 'error');
+    });
+}
+
+function resetStocks() {
+    if (confirm('Reset to default top 20 stocks?')) {
+        fetch('/admin/reset_defaults', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({asset_type: 'stocks'})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('Success', data.message, 'success');
+                location.reload(); // Reload to show updated data
+            } else {
+                showAlert('Error', data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showAlert('Error', 'Network error: ' + error.message, 'error');
+        });
+    }
+}
+
+function resetCrypto() {
+    if (confirm('Reset to default top 10 cryptocurrencies?')) {
+        fetch('/admin/reset_defaults', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({asset_type: 'crypto'})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('Success', data.message, 'success');
+                location.reload(); // Reload to show updated data
+            } else {
+                showAlert('Error', data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showAlert('Error', 'Network error: ' + error.message, 'error');
+        });
+    }
+}
+
+function updateStockBadges(stocks) {
+    const container = document.getElementById('current-stocks');
+    container.innerHTML = stocks.map(stock => 
+        `<span class="badge bg-success me-1 mb-1">${stock}</span>`
+    ).join('');
+}
+
+function updateCryptoBadges(crypto) {
+    const container = document.getElementById('current-crypto');
+    container.innerHTML = crypto.map(c => 
+        `<span class="badge bg-warning me-1 mb-1">${c}</span>`
+    ).join('');
+}
+</script>
+{% endblock %} 

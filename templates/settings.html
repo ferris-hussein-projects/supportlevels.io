@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% set active_page = "settings" %}
+
+{% block title %}Settings - Stock Support Tracker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0">
+                <i data-feather="settings" class="me-2"></i>
+                Settings
+            </h1>
+            <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                <i data-feather="arrow-left" class="me-1"></i>Back to Stocks
+            </a>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i data-feather="sliders" class="me-2"></i>
+                            Preferences
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="threshold" class="form-label">Support Level Threshold</label>
+                                        <div class="input-group">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="threshold" 
+                                                   name="threshold" 
+                                                   value="{{ settings.threshold }}" 
+                                                   min="0.1" 
+                                                   max="50" 
+                                                   step="0.1" 
+                                                   required>
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                        <div class="form-text">
+                                            Percentage threshold for identifying stocks near moving averages (0.1% - 50%)
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="sort_by" class="form-label">Default Sort Column</label>
+                                        <select class="form-select" id="sort_by" name="sort_by">
+                                            <option value="ticker" {% if settings.sort_by == 'ticker' %}selected{% endif %}>
+                                                Ticker Symbol
+                                            </option>
+                                            <option value="price" {% if settings.sort_by == 'price' %}selected{% endif %}>
+                                                Stock Price
+                                            </option>
+                                            <option value="distance" {% if settings.sort_by == 'distance' %}selected{% endif %}>
+                                                Distance to Support
+                                            </option>
+                                            <option value="popularity" {% if settings.sort_by == 'popularity' %}selected{% endif %}>
+                                                Popularity (Views)
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="sort_order" class="form-label">Default Sort Order</label>
+                                        <select class="form-select" id="sort_order" name="sort_order">
+                                            <option value="asc" {% if settings.sort_order == 'asc' %}selected{% endif %}>
+                                                Ascending (A-Z, Low to High)
+                                            </option>
+                                            <option value="desc" {% if settings.sort_order == 'desc' %}selected{% endif %}>
+                                                Descending (Z-A, High to Low)
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="sector_filter" class="form-label">Default Sector Filter</label>
+                                        <select class="form-select" id="sector_filter" name="sector_filter">
+                                            <option value="All" {% if settings.sector_filter == 'All' %}selected{% endif %}>
+                                                All Sectors
+                                            </option>
+                                            {% for sector in all_sectors %}
+                                            <option value="{{ sector }}" {% if settings.sector_filter == sector %}selected{% endif %}>
+                                                {{ sector }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">
+                                <i data-feather="save" class="me-1"></i>Save Settings
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i data-feather="info" class="me-2"></i>
+                            About Sorting
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <strong>Ticker:</strong>
+                            <p class="small text-muted mb-2">Alphabetical order by stock symbol</p>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <strong>Price:</strong>
+                            <p class="small text-muted mb-2">Current stock price value</p>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <strong>Distance to Support:</strong>
+                            <p class="small text-muted mb-2">How close the stock is to its nearest moving average</p>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <strong>Popularity:</strong>
+                            <p class="small text-muted mb-2">Based on how often stocks are viewed in detail</p>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <strong>Sector Filter:</strong>
+                            <p class="small text-muted mb-2">Default sector to show when opening the app</p>
+                        </div>
+                        
+                        <hr>
+                        
+                        <p class="small text-muted">
+                            Settings are automatically saved for your session and will persist across visits.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block title %}Compare Stocks - Stock Support Tracker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0">
+                <i data-feather="bar-chart-2" class="me-2"></i>
+                Stock Comparison
+            </h1>
+            <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                <i data-feather="arrow-left" class="me-1"></i>Back to List
+            </a>
+        </div>
+
+        <!-- Stock Selection Form -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="search" class="me-2"></i>
+                    Select Stocks to Compare
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('compare') }}">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label class="form-label">Select up to 5 stocks to compare:</label>
+                                <select class="form-select" name="tickers" multiple size="6" required>
+                                    {% for ticker in available_tickers %}
+                                    <option value="{{ ticker }}" 
+                                            {% if ticker in selected_tickers %}selected{% endif %}>
+                                        {{ ticker }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">
+                                    Hold Ctrl (Cmd on Mac) to select multiple stocks. Maximum 5 stocks.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Quick Add:</label>
+                                <div class="input-group mb-2">
+                                    <input type="text" class="form-control" id="quickAdd" 
+                                           placeholder="Enter ticker (e.g. AAPL)">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="quickAddTicker()">
+                                        <i data-feather="plus"></i>
+                                    </button>
+                                </div>
+                                <div class="d-grid">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i data-feather="bar-chart-2" class="me-1"></i>
+                                        Compare Selected
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Comparison Results -->
+        {% if comparison_data %}
+        {% if comparison_data.error %}
+        <div class="alert alert-danger" role="alert">
+            <i data-feather="alert-circle" class="me-2"></i>
+            {{ comparison_data.error }}
+        </div>
+        {% elif comparison_data.stocks %}
+
+        <!-- Comparison Summary -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i data-feather="bar-chart" class="me-2"></i>
+                    Comparison Summary
+                </h5>
+                <small class="text-muted">Updated: {{ comparison_data.comparison_date }}</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Ticker</th>
+                                <th>Company</th>
+                                <th>Price</th>
+                                <th>1W Change</th>
+                                <th>1M Change</th>
+                                <th>RSI</th>
+                                <th>P/E Ratio</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ticker, data in comparison_data.stocks.items() %}
+                            <tr>
+                                <td>
+                                    <strong class="text-info">{{ ticker }}</strong>
+                                </td>
+                                <td>
+                                    <span class="small">{{ data.company_name or ticker }}</span>
+                                </td>
+                                <td>
+                                    <strong>${{ data.current_price }}</strong>
+                                </td>
+                                <td>
+                                    {% if data.change_1w %}
+                                    <span class="badge {% if data.change_1w >= 0 %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ "%.2f"|format(data.change_1w) }}%
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if data.change_1m %}
+                                    <span class="badge {% if data.change_1m >= 0 %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ "%.2f"|format(data.change_1m) }}%
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if data.rsi %}
+                                    <span class="badge {% if data.rsi > 70 %}bg-danger{% elif data.rsi < 30 %}bg-success{% else %}bg-warning{% endif %}">
+                                        {{ data.rsi }}
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if data.pe_ratio %}
+                                        {{ "%.2f"|format(data.pe_ratio) }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('stock_detail', ticker=ticker) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i data-feather="eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Comparison -->
+        <div class="row">
+            <!-- Technical Analysis Comparison -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i data-feather="activity" class="me-2"></i>
+                            Technical Analysis
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Ticker</th>
+                                        <th>MA21</th>
+                                        <th>MA50</th>
+                                        <th>MA200</th>
+                                        <th>RSI</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for ticker, data in comparison_data.stocks.items() %}
+                                    <tr>
+                                        <td><strong>{{ ticker }}</strong></td>
+                                        <td>
+                                            {% if data.ma21 %}
+                                                ${{ data.ma21 }}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if data.ma50 %}
+                                                ${{ data.ma50 }}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if data.ma200 %}
+                                                ${{ data.ma200 }}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if data.rsi %}
+                                                {{ data.rsi }}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fundamental Analysis Comparison -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i data-feather="pie-chart" class="me-2"></i>
+                            Fundamental Analysis
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Ticker</th>
+                                        <th>P/E Ratio</th>
+                                        <th>Market Cap</th>
+                                        <th>Div. Yield</th>
+                                        <th>Sector</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for ticker, data in comparison_data.stocks.items() %}
+                                    <tr>
+                                        <td><strong>{{ ticker }}</strong></td>
+                                        <td>
+                                            {% if data.pe_ratio %}
+                                                {{ "%.2f"|format(data.pe_ratio) }}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if data.market_cap %}
+                                                <span class="small">${{ "{:,.0f}".format(data.market_cap / 1000000000) }}B</span>
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if data.dividend_yield %}
+                                                {{ "%.2f"|format(data.dividend_yield * 100) }}%
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="small">{{ data.sector or "—" }}</span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% endif %}
+        {% elif selected_tickers %}
+        <div class="alert alert-info" role="alert">
+            <i data-feather="info" class="me-2"></i>
+            Please select at least 2 stocks to compare.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function quickAddTicker() {
+    const input = document.getElementById('quickAdd');
+    const ticker = input.value.trim().toUpperCase();
+    
+    if (ticker) {
+        const select = document.querySelector('select[name="tickers"]');
+        
+        // Check if ticker already exists
+        let exists = false;
+        for (let option of select.options) {
+            if (option.value === ticker) {
+                option.selected = true;
+                exists = true;
+                break;
+            }
+        }
+        
+        // Add new option if doesn't exist
+        if (!exists) {
+            const option = new Option(ticker, ticker, false, true);
+            select.add(option);
+        }
+        
+        input.value = '';
+        input.focus();
+    }
+}
+
+// Allow Enter key to add ticker
+document.getElementById('quickAdd').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        quickAddTicker();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+});
+</script>
+{% endblock %}

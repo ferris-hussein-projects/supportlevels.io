@@ -1,0 +1,11 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="64" fill="#007bff"/>
+  <path d="M128 384V256L192 192L256 256L320 128L384 192V384H128Z" stroke="white" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="192" cy="192" r="12" fill="white"/>
+  <circle cx="256" cy="256" r="12" fill="white"/>
+  <circle cx="320" cy="128" r="12" fill="white"/>
+  <circle cx="384" cy="192" r="12" fill="white"/>
+  <path d="M128 320H384" stroke="white" stroke-width="6" stroke-dasharray="12 12" opacity="0.6"/>
+  <path d="M128 256H384" stroke="white" stroke-width="6" stroke-dasharray="12 12" opacity="0.4"/>
+  <text x="256" y="460" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="36" font-weight="bold">STOCK TRACKER</text>
+</svg>
