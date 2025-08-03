@@ -19,3 +19,6 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python app.py"
+
+[deployment]
+deploymentTarget = "cloudrun"
