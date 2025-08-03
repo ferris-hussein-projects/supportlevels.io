@@ -41,18 +41,23 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('dashboard') }}">
+                        <a class="nav-link {% if request.endpoint == 'analysis' %}active{% endif %}" href="{{ url_for('analysis') }}">
+                            <i data-feather="trending-up" class="me-1"></i>Analysis
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
                             <i data-feather="bar-chart-2" class="me-1"></i>Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('compare') }}">
-                            <i data-feather="bar-chart-2" class="me-1"></i>Compare
+                        <a class="nav-link {% if request.endpoint == 'compare' %}active{% endif %}" href="{{ url_for('compare') }}">
+                            <i data-feather="git-compare" class="me-1"></i>Compare
                         </a>
                     </li>
                     {% if session.get('is_admin') %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('admin') }}">
+                        <a class="nav-link {% if request.endpoint == 'admin' %}active{% endif %}" href="{{ url_for('admin') }}">
                             <i data-feather="settings" class="me-1"></i>Admin
                         </a>
                     </li>
