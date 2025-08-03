@@ -202,7 +202,7 @@ def logout():
 
 @app.route('/')
 def index():
-    """Simple root endpoint for health checks and main page"""
+    """Simple root endpoint for health checks and redirect to dashboard"""
     # If no user session, return simple health check response for deployment
     if 'user_id' not in session:
         # Check if this is a health check request (no browser headers)
@@ -212,140 +212,7 @@ def index():
         # For real users, redirect to login
         return redirect(url_for('login'))
     
-    try:
-        settings = get_user_settings()
-        support_threshold = settings.support_threshold / 100.0  # Convert percentage to decimal
-        resistance_threshold = settings.resistance_threshold / 100.0  # Convert percentage to decimal
-        level_type = request.args.get('level_type', settings.level_type or 'support')
-        sort_by = request.args.get('sort', settings.sort_by)
-        sort_order = request.args.get('order', settings.sort_order)
-        sector_filter = request.args.get('sector', settings.sector_filter or 'All')
-        
-        # Import managers here to avoid circular imports
-        from crypto_data import crypto_manager
-        
-        # Get stocks and crypto near support/resistance with filtering
-        results = []
-        data_fetch_error = None
-        try:
-            logging.info(f"Fetching data with params: support_threshold={support_threshold}, resistance_threshold={resistance_threshold}, level_type={level_type}, sector_filter={sector_filter}")
-            results = analyzer.get_stocks_near_levels(support_threshold, resistance_threshold, level_type, sector_filter, include_crypto=True)
-            if not results:
-                results = []
-                logging.info("No stocks/crypto found near support/resistance levels with current criteria")
-        except Exception as data_error:
-            logging.error(f"Error fetching stock data: {data_error}", exc_info=True)
-            data_fetch_error = "Error accessing market data. Please check your internet connection."
-            results = []
-        
-        # Debug logging
-        current_threshold = support_threshold if level_type == 'support' else resistance_threshold
-        logging.info(f"Level type: {level_type}, Threshold: {current_threshold}, Sector filter: {sector_filter}")
-        logging.info(f"Raw results count: {len(results)}")
-        
-        # Sort results safely
-        try:
-            if results:  # Only sort if we have results
-                # Filter out any None or invalid results before sorting
-                valid_results = []
-                for result in results:
-                    if result and isinstance(result, dict) and 'ticker' in result:
-                        valid_results.append(result)
-                results = sort_stocks(valid_results, sort_by, sort_order)
-                if results is None:  # If sort_stocks returns None due to error
-                    results = valid_results  # Use unsorted valid results
-        except Exception as sort_error:
-            logging.error(f"Error sorting results: {sort_error}")
-            # Don't clear results, just use them unsorted
-            if not results:
-                results = []
-        
-        # Get summary statistics with error handling
-        try:
-            total_stocks_available = len(analyzer.get_all_sp500_tickers())
-            total_stocks_tracked = len(analyzer.get_top_stocks())
-            total_crypto_available = len(crypto_manager.get_all_crypto_symbols())
-            total_crypto_tracked = len(crypto_manager.get_top_crypto())
-        except Exception as stats_error:
-            logging.error(f"Error getting statistics: {stats_error}")
-            total_stocks_available = 0
-            total_stocks_tracked = 0
-            total_crypto_available = 0
-            total_crypto_tracked = 0
-        
-        total_assets_tracked = total_stocks_tracked + total_crypto_tracked
-        assets_near_levels = len(results)
-        
-        # Get sector information for filtering (conservative groupings)
-        stock_sectors = ['Technology', 'Financial', 'Healthcare', 'Consumer', 'Industrial', 'Energy', 'Communication', 'Utilities']
-        crypto_categories = ['Crypto']  # Simplified to just "Crypto"
-        all_filters = stock_sectors + crypto_categories
-        
-        # Combine sector summaries with error handling
-        sector_summary = {}
-        try:
-            for sector in stock_sectors:
-                count = sum(1 for ticker in analyzer.TICKERS if analyzer.get_stock_sector(ticker) == sector)
-                sector_summary[sector] = count
-            
-            # Simplified crypto summary (all crypto under "Crypto")
-            sector_summary['Crypto'] = len(crypto_manager.get_top_crypto())
-        except Exception as sector_error:
-            logging.error(f"Error calculating sector summary: {sector_error}")
-            sector_summary = {'All': 0}
-        
-        # Calculate threshold for template (use support_threshold for display)
-        current_threshold = support_threshold if level_type == 'support' else resistance_threshold
-        
-        # Check if we have a data fetch error to display
-        error_message = None
-        if data_fetch_error:
-            error_message = data_fetch_error
-        elif not results and not data_fetch_error:
-            error_message = f"No assets found near {level_type} levels with current filter criteria."
-        
-        return render_template('index.html', 
-                             results=results, 
-                             support_threshold=support_threshold * 100,  # Convert back to percentage
-                             resistance_threshold=resistance_threshold * 100,  # Convert back to percentage
-                             threshold=current_threshold * 100,  # Add threshold for template compatibility
-                             level_type=level_type,
-                             total_stocks_available=total_stocks_available,
-                             total_stocks_tracked=total_stocks_tracked,
-                             total_crypto_available=total_crypto_available,
-                             total_crypto_tracked=total_crypto_tracked,
-                             total_assets_tracked=total_assets_tracked,
-                             assets_near_levels=assets_near_levels,
-                             sort_by=sort_by,
-                             sort_order=sort_order,
-                             sector_filter=sector_filter,
-                             all_sectors=all_filters,
-                             sector_summary=sector_summary,
-                             total_stocks=total_stocks_tracked,
-                             total_assets=total_assets_tracked,
-                             error=error_message)
-    except Exception as e:
-        logging.error(f"Critical error in index route: {e}", exc_info=True)
-        return render_template('index.html', 
-                             results=[], 
-                             support_threshold=3.0,
-                             resistance_threshold=3.0,
-                             threshold=3.0,  # Add threshold for template compatibility
-                             level_type='support',
-                             total_stocks_available=0,
-                             total_stocks_tracked=0,
-                             total_crypto_available=0,
-                             total_crypto_tracked=0,
-                             total_assets_tracked=0,
-                             assets_near_levels=0,
-                             sort_by='ticker',
-                             sort_order='asc',
-                             sector_filter='All',
-                             all_sectors=[],
-                             sector_summary={},
-                             total_stocks=0,
-                             total_assets=0,
-                             error="System error. Please refresh the page or try again later.")
+    
 
 @app.route('/landing')
 def landing():
