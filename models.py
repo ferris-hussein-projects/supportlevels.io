@@ -105,10 +105,13 @@ class UserFavorites(db.Model):
 
     @staticmethod
     def get_session_id():
-        """Get or create session ID for guest users"""
+        """Get or create session ID for users"""
         from flask import session
         try:
-            if 'user_session_id' not in session:
+            # Use user_id if logged in, otherwise use session_id
+            if 'user_id' in session:
+                return f"user_{session['user_id']}"
+            elif 'user_session_id' not in session:
                 import uuid
                 session['user_session_id'] = str(uuid.uuid4())
             return session['user_session_id']

@@ -1,151 +1,130 @@
-
 // Favorites functionality
-class FavoriteManager {
-    constructor() {
-        this.favorites = new Set();
-        this.isInitialized = false;
-        this.loadFavorites();
-    }
+let userFavorites = new Set();
 
-    async loadFavorites() {
-        try {
-            const response = await fetch('/api/get_favorites');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            this.favorites = new Set(data.favorites || []);
-            this.isInitialized = true;
-            this.updateFavoriteButtons();
-            console.log('Favorites loaded:', this.favorites);
-        } catch (error) {
+// Load user's favorites on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadUserFavorites();
+    if (typeof loadFavoriteStatuses === 'function') {
+        loadFavoriteStatuses();
+    }
+});
+
+function loadUserFavorites() {
+    fetch('/api/get_favorites')
+        .then(response => response.json())
+        .then(data => {
+            userFavorites = new Set(data.favorites || []);
+            updateFavoriteButtons();
+        })
+        .catch(error => {
             console.error('Error loading favorites:', error);
-            this.favorites = new Set(); // Ensure it's initialized even on error
-            this.isInitialized = true;
-        }
-    }
-
-    async toggleFavorite(ticker, assetType = 'stock') {
-        if (!this.isInitialized) {
-            console.log('Favorites not initialized yet, waiting...');
-            await this.loadFavorites();
-        }
-
-        const isFavorite = this.favorites.has(ticker);
-        const action = isFavorite ? 'remove' : 'add';
-
-        try {
-            const response = await fetch('/api/toggle_favorite', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    ticker: ticker,
-                    asset_type: assetType,
-                    action: action
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            if (result.success) {
-                if (action === 'add') {
-                    this.favorites.add(ticker);
-                } else {
-                    this.favorites.delete(ticker);
-                }
-                this.updateFavoriteButtons();
-                console.log(`${action}ed ${ticker} to favorites`);
-                return true;
-            } else {
-                console.error('Server error:', result.error);
-            }
-        } catch (error) {
-            console.error('Error toggling favorite:', error);
-        }
-        return false;
-    }
-
-    updateFavoriteButtons() {
-        if (!this.isInitialized) {
-            return;
-        }
-
-        document.querySelectorAll('[data-ticker]').forEach(button => {
-            const ticker = button.dataset.ticker;
-            if (!ticker) return;
-
-            const icon = button.querySelector('i');
-            const isFavorite = this.favorites.has(ticker);
-
-            if (icon) {
-                icon.className = isFavorite ? 'fas fa-heart text-danger' : 'far fa-heart text-muted';
-            }
-
-            button.title = isFavorite ? `Remove ${ticker} from favorites` : `Add ${ticker} to favorites`;
         });
-    }
-
-    isFavorite(ticker) {
-        return this.favorites.has(ticker);
-    }
 }
 
-// Global instance
-let favoriteManager = null;
-
-// Global functions for backward compatibility
 function loadFavoriteStatuses() {
-    if (favoriteManager) {
-        favoriteManager.loadFavorites();
-    } else {
-        console.log('FavoriteManager not initialized yet');
-    }
+    // Load and update favorite status for all buttons
+    loadUserFavorites();
 }
 
 function toggleFavorite(ticker, assetType = 'stock') {
-    if (favoriteManager) {
-        return favoriteManager.toggleFavorite(ticker, assetType);
-    } else {
-        console.log('FavoriteManager not initialized yet');
-        return Promise.resolve(false);
-    }
+    const isFavorite = userFavorites.has(ticker);
+    const action = isFavorite ? 'remove' : 'add';
+
+    fetch('/api/toggle_favorite', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            ticker: ticker,
+            asset_type: assetType,
+            action: action
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (action === 'add') {
+                userFavorites.add(ticker);
+            } else {
+                userFavorites.delete(ticker);
+            }
+            updateFavoriteButtons();
+
+            // Show success message
+            const message = action === 'add' ? 
+                `Added ${ticker} to favorites` : 
+                `Removed ${ticker} from favorites`;
+            showToast(message, 'success');
+        } else {
+            showToast('Error updating favorites: ' + (data.error || 'Unknown error'), 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error toggling favorite:', error);
+        showToast('Network error updating favorites', 'error');
+    });
 }
 
-// Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, initializing FavoriteManager');
-    
-    // Initialize favorite manager
-    favoriteManager = new FavoriteManager();
+function updateFavoriteButtons() {
+    // Update all favorite buttons on the page
+    document.querySelectorAll('[data-ticker]').forEach(button => {
+        const ticker = button.getAttribute('data-ticker');
+        const icon = button.querySelector('i[data-feather]');
 
-    // Set up favorite button click handlers
-    document.addEventListener('click', function(e) {
-        const favoriteBtn = e.target.closest('[data-ticker]');
-        if (favoriteBtn && (favoriteBtn.classList.contains('favorite-btn') || favoriteBtn.getAttribute('onclick'))) {
-            e.preventDefault();
-            const ticker = favoriteBtn.dataset.ticker;
-            const assetType = favoriteBtn.dataset.assetType || 'stock';
-            
-            if (favoriteManager) {
-                favoriteManager.toggleFavorite(ticker, assetType);
+        if (userFavorites.has(ticker)) {
+            // Safely add class
+            if (button.classList) {
+                button.classList.add('favorited');
+            } else {
+                button.className += ' favorited';
+            }
+            if (icon) {
+                icon.setAttribute('data-feather', 'heart');
+            }
+        } else {
+            // Safely remove class
+            if (button.classList) {
+                button.classList.remove('favorited');
+            } else {
+                button.className = button.className.replace(/\bfavorited\b/g, '').trim();
+            }
+            if (icon) {
+                icon.setAttribute('data-feather', 'heart');
             }
         }
     });
 
-    // Also handle any existing onclick handlers by updating buttons periodically
-    setInterval(() => {
-        if (favoriteManager && favoriteManager.isInitialized) {
-            favoriteManager.updateFavoriteButtons();
-        }
-    }, 1000);
-});
+    // Refresh feather icons
+    if (typeof feather !== 'undefined') {
+        feather.replace();
+    }
+}
 
-// Ensure favorites are loaded when called from templates
-window.loadFavoriteStatuses = loadFavoriteStatuses;
-window.toggleFavorite = toggleFavorite;
-window.favoriteManager = favoriteManager;
+function showToast(message, type = 'info') {
+    // Simple toast implementation
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'success' ? 'success' : 'danger'} position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 1050; min-width: 300px;';
+    toast.innerHTML = `
+        <div class="d-flex align-items-center">
+            <i data-feather="${type === 'success' ? 'check-circle' : 'alert-circle'}" class="me-2"></i>
+            ${message}
+            <button type="button" class="btn-close ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
+        </div>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Replace feather icons
+    if (typeof feather !== 'undefined') {
+        feather.replace();
+    }
+
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.remove();
+        }
+    }, 3000);
+}

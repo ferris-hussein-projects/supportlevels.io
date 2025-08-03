@@ -201,9 +201,12 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route('/')
-@login_required
 def index():
     """Main page showing stocks approaching support or resistance levels"""
+    # Check if user is logged in, redirect to login if not
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
     try:
         settings = get_user_settings()
         support_threshold = settings.support_threshold / 100.0  # Convert percentage to decimal
@@ -224,10 +227,10 @@ def index():
             results = analyzer.get_stocks_near_levels(support_threshold, resistance_threshold, level_type, sector_filter, include_crypto=True)
             if not results:
                 results = []
-                logging.warning("No results returned from analyzer")
+                logging.info("No stocks/crypto found near support/resistance levels with current criteria")
         except Exception as data_error:
             logging.error(f"Error fetching stock data: {data_error}", exc_info=True)
-            data_fetch_error = str(data_error)
+            data_fetch_error = "Error accessing market data. Please check your internet connection."
             results = []
         
         # Debug logging
@@ -289,6 +292,13 @@ def index():
         # Calculate threshold for template (use support_threshold for display)
         current_threshold = support_threshold if level_type == 'support' else resistance_threshold
         
+        # Check if we have a data fetch error to display
+        error_message = None
+        if data_fetch_error:
+            error_message = data_fetch_error
+        elif not results and not data_fetch_error:
+            error_message = f"No assets found near {level_type} levels with current filter criteria."
+        
         return render_template('index.html', 
                              results=results, 
                              support_threshold=support_threshold * 100,  # Convert back to percentage
@@ -307,9 +317,10 @@ def index():
                              all_sectors=all_filters,
                              sector_summary=sector_summary,
                              total_stocks=total_stocks_tracked,
-                             total_assets=total_assets_tracked)
+                             total_assets=total_assets_tracked,
+                             error=error_message)
     except Exception as e:
-        logging.error(f"Critical error in index route: {e}")
+        logging.error(f"Critical error in index route: {e}", exc_info=True)
         return render_template('index.html', 
                              results=[], 
                              support_threshold=3.0,
@@ -329,7 +340,7 @@ def index():
                              sector_summary={},
                              total_stocks=0,
                              total_assets=0,
-                             error="Unable to fetch stock data. Please try again later.")
+                             error="System error. Please refresh the page or try again later.")
 
 @app.route('/landing')
 def landing():
@@ -369,9 +380,12 @@ def debug():
         return {'error': str(e)}
 
 @app.route('/analysis')
-@login_required
 def analysis():
     """Main page showing stocks approaching support levels"""
+    # Check if user is logged in, redirect to login if not
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
     settings = get_user_settings()
     threshold = settings.threshold / 100.0  # Convert percentage to decimal
     sort_by = request.args.get('sort', settings.sort_by)
@@ -443,7 +457,7 @@ def analysis():
                              sector_filter='All',
                              all_sectors=[],
                              sector_summary={},
-                             error="Unable to fetch stock data. Please try again later.")
+                             error="System error loading analysis data. Please refresh the page.")
 
 # API endpoints for favorites
 @app.route('/api/toggle_favorite', methods=['POST'])
@@ -488,9 +502,12 @@ def api_get_favorites():
         return {"favorites": []}, 500
 
 @app.route('/stock/<ticker>')
-@login_required
 def stock_detail(ticker):
     """Detailed analysis page for individual stock or crypto"""
+    # Check if user is logged in, redirect to login if not
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
     try:
         # Track popularity
         StockPopularity.increment_view(ticker.upper())
@@ -518,7 +535,7 @@ def stock_detail(ticker):
         logging.error(f"Error in stock_detail route for {ticker}: {e}")
         return render_template('stock_detail.html', 
                              ticker=ticker.upper(),
-                             error="Unable to fetch detailed stock data. Please try again later.")
+                             error=f"Unable to fetch data for {ticker.upper()}. Please verify the symbol or try again later.")
 
 @app.route('/search', methods=['POST'])
 @login_required
