@@ -172,9 +172,11 @@ def logout():
 @app.route('/')
 @login_required
 def index():
-    """Main page showing stocks approaching support levels"""
+    """Main page showing stocks approaching support or resistance levels"""
     settings = get_user_settings()
-    threshold = settings.threshold / 100.0  # Convert percentage to decimal
+    support_threshold = settings.support_threshold / 100.0  # Convert percentage to decimal
+    resistance_threshold = settings.resistance_threshold / 100.0  # Convert percentage to decimal
+    level_type = request.args.get('level_type', settings.level_type or 'support')
     sort_by = request.args.get('sort', settings.sort_by)
     sort_order = request.args.get('order', settings.sort_order)
     sector_filter = request.args.get('sector', settings.sector_filter or 'All')
@@ -184,11 +186,12 @@ def index():
         from sector_data import sector_manager
         from crypto_data import crypto_manager
         
-        # Get stocks and crypto near support with filtering
-        results = analyzer.get_stocks_near_support(threshold, sector_filter, include_crypto=True)
+        # Get stocks and crypto near support/resistance with filtering
+        results = analyzer.get_stocks_near_levels(support_threshold, resistance_threshold, level_type, sector_filter, include_crypto=True)
         
         # Debug logging
-        logging.info(f"Threshold: {threshold}, Sector filter: {sector_filter}")
+        current_threshold = support_threshold if level_type == 'support' else resistance_threshold
+        logging.info(f"Level type: {level_type}, Threshold: {current_threshold}, Sector filter: {sector_filter}")
         logging.info(f"Raw results count: {len(results) if results else 0}")
         if results:
             stock_count = sum(1 for r in results if r.get('asset_type', 'stock') == 'stock')
@@ -204,7 +207,7 @@ def index():
         total_crypto_available = len(crypto_manager.get_all_crypto_symbols())
         total_crypto_tracked = len(crypto_manager.get_top_crypto())
         total_assets_tracked = total_stocks_tracked + total_crypto_tracked
-        assets_near_support = len(results)
+        assets_near_levels = len(results)
         
         # Get sector information for filtering (conservative groupings)
         stock_sectors = ['Technology', 'Financial', 'Healthcare', 'Consumer', 'Industrial', 'Energy', 'Communication', 'Utilities']
@@ -222,13 +225,15 @@ def index():
         
         return render_template('index.html', 
                              results=results, 
-                             threshold=threshold * 100,  # Convert back to percentage
+                             support_threshold=support_threshold * 100,  # Convert back to percentage
+                             resistance_threshold=resistance_threshold * 100,  # Convert back to percentage
+                             level_type=level_type,
                              total_stocks_available=total_stocks_available,
                              total_stocks_tracked=total_stocks_tracked,
                              total_crypto_available=total_crypto_available,
                              total_crypto_tracked=total_crypto_tracked,
                              total_assets_tracked=total_assets_tracked,
-                             assets_near_support=assets_near_support,
+                             assets_near_levels=assets_near_levels,
                              sort_by=sort_by,
                              sort_order=sort_order,
                              sector_filter=sector_filter,
@@ -240,13 +245,15 @@ def index():
         logging.error(f"Error in index route: {e}")
         return render_template('index.html', 
                              results=[], 
-                             threshold=threshold * 100,
+                             support_threshold=0.1,
+                             resistance_threshold=0.1,
+                             level_type='support',
                              total_stocks_available=0,
                              total_stocks_tracked=0,
                              total_crypto_available=0,
                              total_crypto_tracked=0,
                              total_assets_tracked=0,
-                             assets_near_support=0,
+                             assets_near_levels=0,
                              sort_by='ticker',
                              sort_order='asc',
                              sector_filter='All',
@@ -606,14 +613,17 @@ def settings():
     if request.method == 'POST':
         try:
             # Update settings
-            threshold = float(request.form.get('threshold', 3.0))
+            support_threshold = float(request.form.get('support_threshold', 0.1))
+            resistance_threshold = float(request.form.get('resistance_threshold', 0.1))
+            level_type = request.form.get('level_type', 'support')
             sort_by = request.form.get('sort_by', 'ticker')
             sort_order = request.form.get('sort_order', 'asc')
-            
             sector_filter = request.form.get('sector_filter', 'All')
             
-            if 0.1 <= threshold <= 50.0:  # Validate percentage range
-                settings.threshold = threshold
+            if 0.1 <= support_threshold <= 50.0 and 0.1 <= resistance_threshold <= 50.0:  # Validate percentage range
+                settings.support_threshold = support_threshold
+                settings.resistance_threshold = resistance_threshold
+                settings.level_type = level_type
                 settings.sort_by = sort_by
                 settings.sort_order = sort_order
                 settings.sector_filter = sector_filter
@@ -641,10 +651,14 @@ def export_csv():
         sector_filter = request.args.get('sector', settings.sector_filter or 'All')
         
         # Get the same results as displayed on the page
-        results = analyzer.get_stocks_near_support(threshold, sector_filter, include_crypto=True)
+        level_type = request.args.get('level_type', 'support')
+        results = analyzer.get_stocks_near_levels(threshold, threshold, level_type, sector_filter, include_crypto=True)
         
-        # Create CSV content with all support levels and halal status
-        csv_content = "Ticker,Company Name,Asset Type,Sector,Price,Support Zones,Support Prices,1M Support,6M Support,1Y Support,5Y Support,Is Halal,Volume\n"
+        # Create CSV content with all support/resistance levels and halal status
+        if level_type == 'support':
+            csv_content = "Ticker,Company Name,Asset Type,Sector,Price,Support Zones,Support Prices,1M Support,6M Support,1Y Support,5Y Support,Is Halal,Volume\n"
+        else:
+            csv_content = "Ticker,Company Name,Asset Type,Sector,Price,Resistance Zones,Resistance Prices,1M Resistance,6M Resistance,1Y Resistance,5Y Resistance,Is Halal,Volume\n"
         
         for result in results:
             # Format halal status
@@ -660,13 +674,19 @@ def export_csv():
             zones = (result.get('zones', '') or '').replace('"', '""')
             support_prices = (result.get('support_prices', '') or '').replace('"', '""')
             
-            csv_content += f'"{result["ticker"]}","{company_name}","{result.get("asset_type", "stock").title()}","{result.get("sector", "Other")}",{result["price"]},"{zones}","{support_prices}",'
-            csv_content += f'{result.get("support_1m", "")},{result.get("support_6m", "")},{result.get("support_1y", "")},{result.get("support_5y", "")},'
+            if level_type == 'support':
+                support_prices = (result.get('support_prices', '') or '').replace('"', '""')
+                csv_content += f'"{result["ticker"]}","{company_name}","{result.get("asset_type", "stock").title()}","{result.get("sector", "Other")}",{result["price"]},"{zones}","{support_prices}",'
+                csv_content += f'{result.get("support_1m", "")},{result.get("support_6m", "")},{result.get("support_1y", "")},{result.get("support_5y", "")},'
+            else:
+                resistance_prices = (result.get('resistance_prices', '') or '').replace('"', '""')
+                csv_content += f'"{result["ticker"]}","{company_name}","{result.get("asset_type", "stock").title()}","{result.get("sector", "Other")}",{result["price"]},"{zones}","{resistance_prices}",'
+                csv_content += f'{result.get("resistance_1m", "")},{result.get("resistance_6m", "")},{result.get("resistance_1y", "")},{result.get("resistance_5y", "")},'
             csv_content += f'"{halal_status}",{result.get("volume", "")}\n'
         
         # Create response
         response = make_response(csv_content)
-        response.headers["Content-Disposition"] = f"attachment; filename=support_stocks_{datetime.now().strftime('%Y%m%d')}.csv"
+        response.headers["Content-Disposition"] = f"attachment; filename={level_type}_stocks_{datetime.now().strftime('%Y%m%d')}.csv"
         response.headers["Content-type"] = "text/csv"
         
         return response

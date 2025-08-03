@@ -168,7 +168,7 @@ class StockAnalyzer:
             lower_band.iloc[-1] if not lower_band.empty else None
         )
 
-    def check_support(self, ticker, threshold=0.03):
+    def check_support(self, ticker, threshold=0.001):
         """Check if stock is near historical support levels (1M, 6M, 1Y, 5Y)"""
         try:
             stock = yf.Ticker(ticker)
@@ -229,10 +229,79 @@ class StockAnalyzer:
                 'volume': int(hist["Volume"].iloc[-1]) if not hist["Volume"].empty else None,
                 'is_halal': self.is_stock_halal(ticker),
                 'tradingview_link': tradingview_link,
+                'level_type': 'support',
                 'error': False
             }
         except Exception as e:
             logging.error(f"Error checking support for {ticker}: {e}")
+            return {'ticker': ticker, 'price': None, 'zones': 'Error fetching data', 'error': True}
+
+    def check_resistance(self, ticker, threshold=0.001):
+        """Check if stock is near historical resistance levels (1M, 6M, 1Y, 5Y)"""
+        try:
+            stock = yf.Ticker(ticker)
+            # Get 5 years of data to calculate all resistance levels
+            hist = stock.history(period="5y")
+
+            if hist.empty or len(hist) < 30:
+                return {'ticker': ticker, 'price': None, 'zones': 'Insufficient data', 'error': True}
+
+            closes = hist["Close"]
+            current_price = closes.iloc[-1]
+
+            # Calculate resistance levels based on historical highs in different timeframes
+            resistance_1m = self._calculate_period_resistance(closes, 21)  # ~1 month
+            resistance_6m = self._calculate_period_resistance(closes, 126)  # ~6 months  
+            resistance_1y = self._calculate_period_resistance(closes, 252)  # ~1 year
+            resistance_5y = self._calculate_period_resistance(closes, len(closes))  # All available data
+
+            zones = []
+            resistance_prices = []
+
+            # Check if current price is near each resistance level
+            # IMPORTANT: Price must be BELOW resistance level to be considered "near resistance"
+            resistance_levels = [
+                (resistance_1m, '1M Resistance'),
+                (resistance_6m, '6M Resistance'), 
+                (resistance_1y, '1Y Resistance'),
+                (resistance_5y, '5Y Resistance')
+            ]
+
+            for resistance_price, period in resistance_levels:
+                if resistance_price and current_price < resistance_price:  # Price must be below resistance
+                    # Calculate how close price is to resistance (as percentage below resistance)
+                    distance_from_resistance = (resistance_price - current_price) / resistance_price
+                    if distance_from_resistance <= threshold:  # Within threshold distance below resistance
+                        zones.append(period)
+                        resistance_prices.append(round(resistance_price, 2))
+
+            resistance_prices_str = ', '.join([f"${price}" for price in resistance_prices]) if resistance_prices else '—'
+
+            # Generate TradingView link if asset is near resistance
+            tradingview_link = None
+            if zones:  # Only generate link if actually near resistance
+                # Try to determine the exchange for TradingView
+                tradingview_symbol = self._get_tradingview_symbol(ticker)
+                tradingview_link = f"https://www.tradingview.com/chart/?symbol={tradingview_symbol}"
+
+            return {
+                'ticker': ticker,
+                'price': round(current_price, 2),
+                'zones': ', '.join(zones) or '—',
+                'resistance_prices': resistance_prices_str,
+                'resistance_levels': resistance_prices,  # Array for programmatic access
+                'resistance_1m': round(resistance_1m, 2) if resistance_1m else None,
+                'resistance_6m': round(resistance_6m, 2) if resistance_6m else None,
+                'resistance_1y': round(resistance_1y, 2) if resistance_1y else None,
+                'resistance_5y': round(resistance_5y, 2) if resistance_5y else None,
+                'volume': int(hist["Volume"].iloc[-1]) if not hist["Volume"].empty else None,
+                'is_halal': self.is_stock_halal(ticker),
+                'tradingview_link': tradingview_link,
+                'level_type': 'resistance',
+                'error': False
+            }
+        except Exception as e:
+            logging.error(f"Error checking resistance for {ticker}: {e}")
             return {'ticker': ticker, 'price': None, 'zones': 'Error fetching data', 'error': True}
 
     def _get_tradingview_symbol(self, ticker):
@@ -282,8 +351,29 @@ class StockAnalyzer:
         except Exception:
             return None
 
-    def get_stocks_near_support(self, threshold=0.03, sector_filter='All', include_crypto=True):
-        """Get stocks and optionally crypto approaching support levels with filtering and favorites support"""
+    def _calculate_period_resistance(self, closes, lookback_days):
+        """Calculate resistance level for a given period using highest high and key resistance zones"""
+        try:
+            if len(closes) < lookback_days:
+                lookback_days = len(closes)
+
+            period_data = closes.tail(lookback_days)
+
+            # Find the highest high in the period
+            period_high = period_data.max()
+
+            # Also consider areas where price has been rejected multiple times (resistance zones)
+            # Calculate resistance as the 90th percentile of prices in the period
+            resistance_zone = period_data.quantile(0.90)
+
+            # Return the lower of the two (more conservative resistance)
+            return min(period_high, resistance_zone)
+
+        except Exception:
+            return None
+
+    def get_stocks_near_levels(self, support_threshold=0.001, resistance_threshold=0.001, level_type='support', sector_filter='All', include_crypto=True):
+        """Get stocks and optionally crypto approaching support or resistance levels with filtering and favorites support"""
         results = []
 
         # Handle favorites filter
@@ -296,7 +386,11 @@ class StockAnalyzer:
             # Process favorite stocks
             for ticker in favorite_tickers:
                 if ticker in self.ALL_SP500_TICKERS:  # Check against full S&P 500 list
-                    result = self.check_support(ticker, threshold)
+                    if level_type == 'support':
+                        result = self.check_support(ticker, support_threshold)
+                    else:
+                        result = self.check_resistance(ticker, resistance_threshold)
+                    
                     if not result['error'] and result['zones'] not in (None, '', '—'):
                         result['asset_type'] = 'stock'
                         result['sector'] = self.get_stock_sector(ticker)
@@ -307,7 +401,10 @@ class StockAnalyzer:
                     from crypto_data import crypto_manager
                     crypto_symbols = crypto_manager.get_all_crypto_symbols()
                     if ticker in crypto_symbols:
-                        crypto_result = crypto_manager.check_crypto_support(ticker, threshold)
+                        if level_type == 'support':
+                            crypto_result = crypto_manager.check_crypto_support(ticker, support_threshold)
+                        else:
+                            crypto_result = crypto_manager.check_crypto_resistance(ticker, resistance_threshold)
                         if crypto_result and not crypto_result.get('error'):
                             results.append(crypto_result)
             return results
@@ -323,7 +420,11 @@ class StockAnalyzer:
 
         for ticker in tickers_to_check:
             try:
-                result = self.check_support(ticker, threshold)
+                if level_type == 'support':
+                    result = self.check_support(ticker, support_threshold)
+                else:
+                    result = self.check_resistance(ticker, resistance_threshold)
+                    
                 if not result['error'] and result['zones'] not in (None, '', '—'):
                     result['sector'] = self.get_stock_sector(ticker)
                     result['company_name'] = self.get_company_name(ticker)
@@ -338,15 +439,25 @@ class StockAnalyzer:
             from crypto_data import crypto_manager
             if sector_filter == 'Crypto':
                 # Only crypto selected
-                crypto_results = crypto_manager.get_cryptos_near_support(threshold)
+                if level_type == 'support':
+                    crypto_results = crypto_manager.get_cryptos_near_support(support_threshold)
+                else:
+                    crypto_results = crypto_manager.get_cryptos_near_resistance(resistance_threshold)
                 results.extend(crypto_results)
             elif sector_filter == 'All':
                 # All assets selected, include crypto
-                crypto_results = crypto_manager.get_cryptos_near_support(threshold)
+                if level_type == 'support':
+                    crypto_results = crypto_manager.get_cryptos_near_support(support_threshold)
+                else:
+                    crypto_results = crypto_manager.get_cryptos_near_resistance(resistance_threshold)
                 results.extend(crypto_results)
             # If a specific stock sector is selected, skip crypto
 
         return results
+
+    def get_stocks_near_support(self, threshold=0.001, sector_filter='All', include_crypto=True):
+        """Backward compatibility method - use get_stocks_near_levels instead"""
+        return self.get_stocks_near_levels(support_threshold=threshold, level_type='support', sector_filter=sector_filter, include_crypto=include_crypto)
 
     def get_stock_sector(self, ticker):
         """Get sector for any S&P 500 stock (enhanced from get_fortune500_sector)"""

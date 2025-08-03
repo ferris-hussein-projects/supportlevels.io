@@ -1,3 +1,7 @@
+This code modifies the Jinja2 template to include toggles for support and resistance levels and color-codes the displayed data accordingly.
+```
+
+```html
 {% extends "base.html" %}
 
 {% block title %}Support Tracker - Stock Support Tracker{% endblock %}
@@ -140,14 +144,46 @@
         {% endif %}
 
         {% if results %}
-        <div class="card">
-            <div class="card-header">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+        
+<div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="card-title mb-0">
                         <i data-feather="list" class="me-2"></i>
-                        Support Level Analysis
+                        {% if level_type == 'support' %}Support{% else %}Resistance{% endif %} Level Analysis
                     </h5>
                     <div class="d-flex gap-2 align-items-center">
+                        <!-- Level Type Toggle -->
+                        <div class="btn-group" role="group" aria-label="Level type toggle">
+                            <a href="{{ url_for('index', level_type='support', sort=sort_by, order=sort_order, sector=sector_filter) }}" 
+                               class="btn btn-sm {% if level_type == 'support' %}btn-success{% else %}btn-outline-success{% endif %}">
+                                <i data-feather="trending-down" class="me-1"></i>Support
+                            </a>
+                            <a href="{{ url_for('index', level_type='resistance', sort=sort_by, order=sort_order, sector=sector_filter) }}" 
+                               class="btn btn-sm {% if level_type == 'resistance' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+                                <i data-feather="trending-up" class="me-1"></i>Resistance
+                            </a>
+                        </div>
+<div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="card-title mb-0">
+                        <i data-feather="list" class="me-2"></i>
+                        {% if level_type == 'support' %}Support{% else %}Resistance{% endif %} Level Analysis
+                    </h5>
+                    <div class="d-flex gap-2 align-items-center">
+                        <!-- Level Type Toggle -->
+                        <div class="btn-group" role="group" aria-label="Level type toggle">
+                            <a href="{{ url_for('index', level_type='support', sort=sort_by, order=sort_order, sector=sector_filter) }}" 
+                               class="btn btn-sm {% if level_type == 'support' %}btn-success{% else %}btn-outline-success{% endif %}">
+                                <i data-feather="trending-down" class="me-1"></i>Support
+                            </a>
+                            <a href="{{ url_for('index', level_type='resistance', sort=sort_by, order=sort_order, sector=sector_filter) }}" 
+                               class="btn btn-sm {% if level_type == 'resistance' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+                                <i data-feather="trending-up" class="me-1"></i>Resistance
+                            </a>
+                        </div>
+
                         <div class="dropdown">
                             <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
                                 <i data-feather="filter" class="me-1"></i>Sort
@@ -183,32 +219,52 @@
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead class="table-dark">
-                            <th>
-                                    <a href="?sort=ticker&order={{ 'desc' if sort_by == 'ticker' and sort_order == 'asc' else 'asc' }}{% if sector_filter and sector_filter != 'All' %}&sector={{ sector_filter }}{% endif %}" 
-                                       class="text-decoration-none text-white">
-                                        Ticker {% if sort_by == 'ticker' %}{% if sort_order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}
-                                    </a>
-                                </th>
-                                <th>Name</th>
-                                <th>Category</th>
-                                <th>Type</th>
-                                <th>
-                                    <a href="?sort=price&order={{ 'desc' if sort_by == 'price' and sort_order == 'asc' else 'asc' }}{% if sector_filter and sector_filter != 'All' %}&sector={{ sector_filter }}{% endif %}" 
-                                       class="text-decoration-none text-white">
-                                        Price {% if sort_by == 'price' %}{% if sort_order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}
-                                    </a>
-                                </th>
-                                <th>Support Zone(s)</th>
-                                <th>Support Timeframes</th>
-                                <th>Support Prices</th>
-                                <th>Halal</th>
-                                <th>
-                                    <a href="?sort=popularity&order={{ 'desc' if sort_by == 'popularity' and sort_order == 'asc' else 'asc' }}{% if sector_filter and sector_filter != 'All' %}&sector={{ sector_filter }}{% endif %}" 
-                                       class="text-decoration-none text-white">
-                                        Popularity {% if sort_by == 'popularity' %}{% if sort_order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}
-                                    </a>
-                                </th>
-                                <th>Actions</th>
+                            
+<th scope="col">
+                                <a href="{{ url_for('index', sort='ticker', order='asc' if sort_by != 'ticker' or sort_order == 'desc' else 'desc', sector=sector_filter, level_type=level_type) }}" 
+                                   class="text-decoration-none">
+                                    Asset <i data-feather="arrow-up-down" class="ms-1"></i>
+                                </a>
+                            </th>
+                            <th scope="col">
+                                <a href="{{ url_for('index', sort='price', order='asc' if sort_by != 'price' or sort_order == 'desc' else 'desc', sector=sector_filter, level_type=level_type) }}" 
+                                   class="text-decoration-none">
+                                    Price <i data-feather="arrow-up-down" class="ms-1"></i>
+                                </a>
+                            </th>
+                            <th scope="col" class="{% if level_type == 'support' %}text-success{% else %}text-danger{% endif %}">
+                                {% if level_type == 'support' %}Support{% else %}Resistance{% endif %} Zones
+                            </th>
+                            <th scope="col" class="{% if level_type == 'support' %}text-success{% else %}text-danger{% endif %}">
+                                {% if level_type == 'support' %}Support{% else %}Resistance{% endif %} Prices
+                            </th>
+                            <th scope="col">Sector</th>
+                            <th scope="col">Halal</th>
+                            <th scope="col">Volume</th>
+                            <th scope="col">Actions</th>
+
+<th scope="col">
+                                <a href="{{ url_for('index', sort='ticker', order='asc' if sort_by != 'ticker' or sort_order == 'desc' else 'desc', sector=sector_filter, level_type=level_type) }}" 
+                                   class="text-decoration-none">
+                                    Asset <i data-feather="arrow-up-down" class="ms-1"></i>
+                                </a>
+                            </th>
+                            <th scope="col">
+                                <a href="{{ url_for('index', sort='price', order='asc' if sort_by != 'price' or sort_order == 'desc' else 'desc', sector=sector_filter, level_type=level_type) }}" 
+                                   class="text-decoration-none">
+                                    Price <i data-feather="arrow-up-down" class="ms-1"></i>
+                                </a>
+                            </th>
+                            <th scope="col" class="{% if level_type == 'support' %}text-success{% else %}text-danger{% endif %}">
+                                {% if level_type == 'support' %}Support{% else %}Resistance{% endif %} Zones
+                            </th>
+                            <th scope="col" class="{% if level_type == 'support' %}text-success{% else %}text-danger{% endif %}">
+                                {% if level_type == 'support' %}Support{% else %}Resistance{% endif %} Prices
+                            </th>
+                            <th scope="col">Sector</th>
+                            <th scope="col">Halal</th>
+                            <th scope="col">Volume</th>
+                            <th scope="col">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -246,11 +302,34 @@
                                         {% endif %}
                                     </strong>
                                 </td>
+                                
+<td>
+                                <span class="badge {% if level_type == 'support' %}bg-success{% else %}bg-danger{% endif %}">{{ result.zones }}</span>
+                            </td>
+                            <td>
+                                <span class="fw-bold {% if level_type == 'support' %}text-success{% else %}text-danger{% endif %}">
+                                    {% if level_type == 'support' %}
+                                        {{ result.support_prices or result.get('resistance_prices', '—') }}
+                                    {% else %}
+                                        {{ result.get('resistance_prices', result.support_prices or '—') }}
+                                    {% endif %}
+                                </span>
+                            </td>
+
+<td>
+                                <span class="badge {% if level_type == 'support' %}bg-success{% else %}bg-danger{% endif %}">{{ result.zones }}</span>
+                            </td>
+                            <td>
+                                <span class="fw-bold {% if level_type == 'support' %}text-success{% else %}text-danger{% endif %}">
+                                    {% if level_type == 'support' %}
+                                        {{ result.support_prices or result.get('resistance_prices', '—') }}
+                                    {% else %}
+                                        {{ result.get('resistance_prices', result.support_prices or '—') }}
+                                    {% endif %}
+                                </span>
+                            </td>
                                 <td>
-                                    <span class="badge bg-warning">{{ stock.zones }}</span>
-                                </td>
-                                <td>
-                                    <strong class="text-success">{{ stock.support_prices or '—' }}</strong>
+                                    <span class="badge {% if stock.asset_type == 'crypto' %}bg-warning{% else %}bg-info{% endif %}">{{ stock.sector or 'Unknown' }}</span>
                                 </td>
                                 <td>
                                     {% if stock.asset_type == 'crypto' %}
@@ -323,3 +402,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
+`

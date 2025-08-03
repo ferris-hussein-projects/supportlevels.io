@@ -40,7 +40,10 @@ class User(db.Model):
 class UserSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.String(255), unique=True, nullable=False)
-    threshold = db.Column(db.Float, default=5.0)  # Threshold percentage
+    threshold = db.Column(db.Float, default=0.1)  # Legacy threshold for backward compatibility
+    support_threshold = db.Column(db.Float, default=0.1)  # Support threshold percentage
+    resistance_threshold = db.Column(db.Float, default=0.1)  # Resistance threshold percentage
+    level_type = db.Column(db.String(20), default='support')  # 'support' or 'resistance'
     sort_by = db.Column(db.String(50), default='ticker')  # ticker, price, distance, popularity
     sort_order = db.Column(db.String(10), default='asc')  # asc, desc
     sector_filter = db.Column(db.String(100), default='All')  # sector filter preference
