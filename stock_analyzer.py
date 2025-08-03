@@ -6,6 +6,8 @@ import logging
 from typing import Dict, List, Optional
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import queue
 
 class StockAnalyzer:
     def __init__(self):
@@ -142,26 +144,65 @@ class StockAnalyzer:
             thread = threading.Thread(target=self._warm_cache, daemon=True)
             thread.start()
     
+    def _fetch_batch_stock_data(self, tickers_batch):
+        """Fetch data for a batch of tickers in parallel"""
+        results = {}
+        
+        def fetch_single(ticker):
+            try:
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period="5y")
+                if not hist.empty:
+                    return ticker, hist
+            except Exception as e:
+                logging.error(f"Error fetching batch data for {ticker}: {e}")
+            return ticker, None
+        
+        # Use threading for batch fetching
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            future_to_ticker = {executor.submit(fetch_single, ticker): ticker for ticker in tickers_batch}
+            
+            for future in as_completed(future_to_ticker):
+                ticker, hist = future.result()
+                if hist is not None:
+                    results[ticker] = hist
+        
+        return results
+
     def _warm_cache(self):
-        """Warm the cache with stock data at startup"""
+        """Warm the cache with stock data at startup using batch processing"""
         try:
             self._is_cache_warming = True
-            logging.info("Starting cache warming...")
+            logging.info("Starting threaded cache warming...")
             
-            # Warm cache for top stocks
-            for ticker in self._top_stocks:
+            # Process stocks in batches
+            batch_size = 8
+            for i in range(0, len(self._top_stocks), batch_size):
+                batch = self._top_stocks[i:i + batch_size]
+                
                 try:
-                    self._fetch_and_cache_stock_data(ticker)
-                    time.sleep(0.1)  # Small delay to avoid hitting rate limits
+                    batch_results = self._fetch_batch_stock_data(batch)
+                    
+                    # Store results in cache
+                    with self._cache_lock:
+                        for ticker, hist in batch_results.items():
+                            self._data_cache[ticker] = {
+                                'history': hist,
+                                'timestamp': datetime.now()
+                            }
+                    
+                    logging.info(f"Cached batch of {len(batch_results)} stocks")
+                    time.sleep(0.2)  # Small delay between batches
+                    
                 except Exception as e:
-                    logging.error(f"Error caching data for {ticker}: {e}")
+                    logging.error(f"Error processing batch {batch}: {e}")
                     continue
             
             self._cache_timestamp = datetime.now()
-            logging.info(f"Cache warming completed for {len(self._top_stocks)} stocks")
+            logging.info(f"Threaded cache warming completed for {len(self._top_stocks)} stocks")
             
         except Exception as e:
-            logging.error(f"Error during cache warming: {e}")
+            logging.error(f"Error during threaded cache warming: {e}")
         finally:
             self._is_cache_warming = False
     
@@ -720,11 +761,29 @@ class StockAnalyzer:
             logging.error(f"Error in _calculate_period_resistance: {e}")
             return None
 
-    def get_stocks_near_levels(self, support_threshold=0.001, resistance_threshold=0.001, level_type='support', sector_filter='All', include_crypto=True):
-        """Get stocks and optionally crypto approaching support or resistance levels with filtering and favorites support"""
+    def _analyze_ticker_threaded(self, ticker, level_type, threshold):
+        """Thread-safe ticker analysis"""
+        try:
+            if level_type == 'support':
+                result = self.check_support(ticker, threshold)
+            else:
+                result = self.check_resistance(ticker, threshold)
+                
+            if not result.get('error') and result.get('zones') not in (None, '', '—'):
+                result['sector'] = self.get_stock_sector(ticker)
+                result['company_name'] = self.get_company_name(ticker)
+                result['asset_type'] = 'stock'
+                return result
+        except Exception as e:
+            logging.error(f"Error processing {ticker}: {e}")
+        return None
+
+    def get_stocks_near_levels_threaded(self, support_threshold=0.001, resistance_threshold=0.001, level_type='support', sector_filter='All', include_crypto=True, max_workers=8):
+        """Multi-threaded version of get_stocks_near_levels for better performance"""
         results = []
+        threshold = support_threshold if level_type == 'support' else resistance_threshold
         
-        logging.info(f"Starting get_stocks_near_levels with {len(self._top_stocks)} top stocks")
+        logging.info(f"Starting threaded analysis with {max_workers} workers")
 
         try:
             # Handle favorites filter
@@ -735,96 +794,90 @@ class StockAnalyzer:
                     if not favorite_tickers:
                         return results
 
-                    # Process favorite stocks (limit to 20 for performance)
-                    favorite_tickers = favorite_tickers[:20]
-                    for ticker in favorite_tickers:
-                        try:
-                            if ticker in self.ALL_SP500_TICKERS:  # Check against full S&P 500 list
-                                if level_type == 'support':
-                                    result = self.check_support(ticker, support_threshold)
-                                else:
-                                    result = self.check_resistance(ticker, resistance_threshold)
-                                
-                                if not result.get('error') and result.get('zones') not in (None, '', '—'):
-                                    result['asset_type'] = 'stock'
-                                    result['sector'] = self.get_stock_sector(ticker)
-                                    result['company_name'] = self.get_company_name(ticker)
-                                    results.append(result)
-                            else:
-                                # Check if it's a crypto
-                                from crypto_data import crypto_manager
-                                crypto_symbols = crypto_manager.get_all_crypto_symbols()
-                                if ticker in crypto_symbols:
+                    # Process favorite stocks with threading
+                    stock_tickers = [t for t in favorite_tickers[:20] if t in self.ALL_SP500_TICKERS]
+                    
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        future_to_ticker = {
+                            executor.submit(self._analyze_ticker_threaded, ticker, level_type, threshold): ticker 
+                            for ticker in stock_tickers
+                        }
+                        
+                        for future in as_completed(future_to_ticker):
+                            result = future.result()
+                            if result:
+                                results.append(result)
+
+                    # Handle crypto favorites
+                    crypto_tickers = [t for t in favorite_tickers if t not in self.ALL_SP500_TICKERS]
+                    if crypto_tickers:
+                        from crypto_data import crypto_manager
+                        for ticker in crypto_tickers:
+                            if ticker in crypto_manager.get_all_crypto_symbols():
+                                try:
                                     if level_type == 'support':
-                                        crypto_result = crypto_manager.check_crypto_support(ticker, support_threshold)
+                                        crypto_result = crypto_manager.check_crypto_support(ticker, threshold)
                                     else:
-                                        crypto_result = crypto_manager.check_crypto_resistance(ticker, resistance_threshold)
+                                        crypto_result = crypto_manager.check_crypto_resistance(ticker, threshold)
                                     if crypto_result and not crypto_result.get('error'):
                                         results.append(crypto_result)
-                        except Exception as ticker_error:
-                            logging.error(f"Error processing favorite ticker {ticker}: {ticker_error}")
-                            continue
+                                except Exception as e:
+                                    logging.error(f"Error processing crypto favorite {ticker}: {e}")
+                    
                     return results
                 except Exception as fav_error:
                     logging.error(f"Error processing favorites: {fav_error}")
                     return results
 
-            # Get stock results from top stocks only
-            tickers_to_check = self._top_stocks[:15]  # Reduce to 15 for better performance
+            # Get stock tickers to check
+            tickers_to_check = self._top_stocks[:20]  # Increased limit since threading is faster
             if sector_filter != 'All' and not sector_filter.startswith('Crypto'):
-                # Filter by stock sector
-                tickers_to_check = [ticker for ticker in self._top_stocks if self.get_stock_sector(ticker) == sector_filter][:10]
+                tickers_to_check = [ticker for ticker in self._top_stocks if self.get_stock_sector(ticker) == sector_filter][:15]
             elif sector_filter.startswith('Crypto'):
-                # Only crypto filter selected, skip stocks
                 tickers_to_check = []
 
-            # Process stocks in smaller batches for better performance
-            batch_size = 5
-            for i in range(0, len(tickers_to_check), batch_size):
-                batch = tickers_to_check[i:i + batch_size]
-                for ticker in batch:
-                    try:
-                        if level_type == 'support':
-                            result = self.check_support(ticker, support_threshold)
-                        else:
-                            result = self.check_resistance(ticker, resistance_threshold)
-                            
-                        if not result.get('error') and result.get('zones') not in (None, '', '—'):
-                            result['sector'] = self.get_stock_sector(ticker)
-                            result['company_name'] = self.get_company_name(ticker)
-                            result['asset_type'] = 'stock'
+            # Multi-threaded stock analysis
+            if tickers_to_check:
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    future_to_ticker = {
+                        executor.submit(self._analyze_ticker_threaded, ticker, level_type, threshold): ticker 
+                        for ticker in tickers_to_check
+                    }
+                    
+                    for future in as_completed(future_to_ticker):
+                        result = future.result()
+                        if result:
                             results.append(result)
-                    except Exception as e:
-                        logging.error(f"Error processing {ticker}: {e}")
-                        continue
 
             # Get crypto results if enabled
             if include_crypto:
                 try:
                     from crypto_data import crypto_manager
                     if sector_filter == 'Crypto':
-                        # Only crypto selected
                         if level_type == 'support':
-                            crypto_results = crypto_manager.get_cryptos_near_support(support_threshold)
+                            crypto_results = crypto_manager.get_cryptos_near_support_threaded(threshold, max_workers)
                         else:
-                            crypto_results = crypto_manager.get_cryptos_near_resistance(resistance_threshold)
+                            crypto_results = crypto_manager.get_cryptos_near_resistance_threaded(threshold, max_workers)
                         results.extend(crypto_results or [])
                     elif sector_filter == 'All':
-                        # All assets selected, include crypto
                         if level_type == 'support':
-                            crypto_results = crypto_manager.get_cryptos_near_support(support_threshold)
+                            crypto_results = crypto_manager.get_cryptos_near_support_threaded(threshold, max_workers)
                         else:
-                            crypto_results = crypto_manager.get_cryptos_near_resistance(resistance_threshold)
+                            crypto_results = crypto_manager.get_cryptos_near_resistance_threaded(threshold, max_workers)
                         results.extend(crypto_results or [])
-                    # If a specific stock sector is selected, skip crypto
                 except Exception as crypto_error:
                     logging.error(f"Error processing crypto data: {crypto_error}")
 
         except Exception as e:
-            logging.error(f"Critical error in get_stocks_near_levels: {e}")
+            logging.error(f"Critical error in threaded analysis: {e}")
             return []
 
         return results
+
+    def get_stocks_near_levels(self, support_threshold=0.001, resistance_threshold=0.001, level_type='support', sector_filter='All', include_crypto=True):
+        """Get stocks and optionally crypto approaching support or resistance levels with filtering and favorites support"""
+        # Use threaded version for better performance
+        return self.get_stocks_near_levels_threaded(support_threshold, resistance_threshold, level_type, sector_filter, include_crypto)
 
     def get_stocks_near_support(self, threshold=0.001, sector_filter='All', include_crypto=True):
         """Backward compatibility method - use get_stocks_near_levels instead"""

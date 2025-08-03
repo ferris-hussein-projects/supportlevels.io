@@ -6,6 +6,7 @@ import logging
 from typing import Dict, List, Optional
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class CryptoDataManager:
     """Manages cryptocurrency data and analysis with configurable top crypto system"""
@@ -747,37 +748,68 @@ class CryptoDataManager:
             logging.error(f"Error in crypto resistance calculation: {e}")
             return None
 
-    def get_cryptos_near_support(self, threshold: float = 0.03) -> List[Dict]:
-        """Get cryptocurrencies approaching support levels (from top crypto list only)"""
-        results = []
-
-        # Use top crypto list for analysis (limit to first 8 for performance)
-        for symbol in self._top_crypto[:8]:
-            try:
+    def _analyze_crypto_threaded(self, symbol, level_type, threshold):
+        """Thread-safe crypto analysis"""
+        try:
+            if level_type == 'support':
                 result = self.check_crypto_support(symbol, threshold)
-                if not result['error'] and result['zones'] not in (None, '', '—'):
+            else:
+                result = self.check_crypto_resistance(symbol, threshold)
+                
+            if not result.get('error') and result.get('zones') not in (None, '', '—'):
+                return result
+        except Exception as e:
+            logging.error(f"Error processing crypto {symbol}: {e}")
+        return None
+
+    def get_cryptos_near_support_threaded(self, threshold: float = 0.03, max_workers: int = 6) -> List[Dict]:
+        """Multi-threaded version for getting cryptocurrencies approaching support levels"""
+        results = []
+        
+        # Use more crypto symbols with threading
+        symbols_to_check = self._top_crypto[:12]  # Increased from 8 since threading is faster
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_symbol = {
+                executor.submit(self._analyze_crypto_threaded, symbol, 'support', threshold): symbol 
+                for symbol in symbols_to_check
+            }
+            
+            for future in as_completed(future_to_symbol):
+                result = future.result()
+                if result:
                     results.append(result)
-            except Exception as e:
-                logging.error(f"Error processing {symbol}: {e}")
-                continue
 
         return results
+
+    def get_cryptos_near_resistance_threaded(self, threshold: float = 0.03, max_workers: int = 6) -> List[Dict]:
+        """Multi-threaded version for getting cryptocurrencies approaching resistance levels"""
+        results = []
+        
+        symbols_to_check = self._top_crypto[:12]  # Increased from 8 since threading is faster
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_symbol = {
+                executor.submit(self._analyze_crypto_threaded, symbol, 'resistance', threshold): symbol 
+                for symbol in symbols_to_check
+            }
+            
+            for future in as_completed(future_to_symbol):
+                result = future.result()
+                if result:
+                    results.append(result)
+
+        return results
+
+    def get_cryptos_near_support(self, threshold: float = 0.03) -> List[Dict]:
+        """Get cryptocurrencies approaching support levels (from top crypto list only)"""
+        # Use threaded version for better performance
+        return self.get_cryptos_near_support_threaded(threshold)
 
     def get_cryptos_near_resistance(self, threshold: float = 0.03) -> List[Dict]:
         """Get cryptocurrencies approaching resistance levels (from top crypto list only)"""
-        results = []
-
-        # Use top crypto list for analysis (limit to first 8 for performance)
-        for symbol in self._top_crypto[:8]:
-            try:
-                result = self.check_crypto_resistance(symbol, threshold)
-                if not result['error'] and result['zones'] not in (None, '', '—'):
-                    results.append(result)
-            except Exception as e:
-                logging.error(f"Error processing resistance for {symbol}: {e}")
-                continue
-
-        return results
+        # Use threaded version for better performance
+        return self.get_cryptos_near_resistance_threaded(threshold)
 
     def get_detailed_crypto_analysis(self, symbol: str) -> Dict:
         """Get detailed technical analysis for a cryptocurrency"""
