@@ -1,6 +1,6 @@
 import os
 import logging
-from flask import Flask, render_template, request, redirect, url_for, session, make_response, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, session, make_response, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 import yfinance as yf
@@ -9,7 +9,6 @@ import json
 from datetime import datetime, timedelta
 from stock_analyzer import StockAnalyzer
 import uuid
-from functools import wraps
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -25,13 +24,11 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 }
 
 # Import models and initialize db
-from models import db, User, UserSettings, StockPopularity, TopAssetConfiguration
+from models import db, UserSettings, StockPopularity, TopAssetConfiguration
 db.init_app(app)
 
 with app.app_context():
     db.create_all()
-    # Create default users
-    User.create_default_users()
 
 # Initialize stock analyzer
 analyzer = StockAnalyzer()
@@ -62,33 +59,7 @@ def get_or_create_session_id():
         session['session_id'] = str(uuid.uuid4())
     return session['session_id']
 
-def login_required(f):
-    """Decorator to require login for protected routes"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
 
-def admin_required(f):
-    """Decorator to require admin privileges"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('login'))
-        user = User.query.get(session['user_id'])
-        if not user or not user.is_admin:
-            flash('Admin access required.', 'error')
-            return redirect(url_for('index'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-def get_current_user():
-    """Get current logged in user"""
-    if 'user_id' in session:
-        return User.query.get(session['user_id'])
-    return None
 
 def get_user_settings():
     """Get user settings from database"""
@@ -173,35 +144,9 @@ def sort_stocks(results, sort_by='ticker', sort_order='asc'):
 
 
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    """Login page"""
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        user = User.query.filter_by(username=username).first()
-        
-        if user and user.check_password(password):
-            session['user_id'] = user.id
-            session['username'] = user.username
-            session['is_admin'] = user.is_admin
-            flash(f'Welcome, {user.username}!', 'success')
-            return redirect(url_for('index'))
-        else:
-            flash('Invalid username or password.', 'error')
-    
-    return render_template('login.html')
 
-@app.route('/logout')
-def logout():
-    """Logout user"""
-    session.clear()
-    flash('You have been logged out.', 'info')
-    return redirect(url_for('login'))
 
 @app.route('/')
-@login_required
 def index():
     """Main page showing stocks approaching support or resistance levels"""
     try:
@@ -341,7 +286,6 @@ def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}, 200
 
 @app.route('/debug')
-@login_required  
 def debug():
     """Debug endpoint to check analyzer status"""
     try:
@@ -367,7 +311,6 @@ def debug():
         return {'error': str(e)}
 
 @app.route('/analysis')
-@login_required
 def analysis():
     """Main page showing stocks approaching support levels"""
     settings = get_user_settings()
@@ -476,7 +419,6 @@ def api_get_favorites():
         return {"favorites": []}, 500
 
 @app.route('/stock/<ticker>')
-@login_required
 def stock_detail(ticker):
     """Detailed analysis page for individual stock or crypto"""
     try:
@@ -509,7 +451,6 @@ def stock_detail(ticker):
                              error="Unable to fetch detailed stock data. Please try again later.")
 
 @app.route('/search', methods=['POST'])
-@login_required
 def search_stock():
     """Search for a specific stock"""
     ticker = request.form.get('ticker', '').upper().strip()
@@ -518,7 +459,6 @@ def search_stock():
     return redirect(url_for('index'))
 
 @app.route('/dashboard')
-@login_required
 def dashboard():
     """Dashboard with summary statistics and market overview"""
     try:
@@ -536,7 +476,6 @@ def dashboard():
                              error="Unable to fetch dashboard data. Please try again later.")
 
 @app.route('/compare')
-@login_required
 def compare():
     """Stock comparison page"""
     tickers = request.args.getlist('tickers')
@@ -556,122 +495,9 @@ def compare():
                          selected_tickers=tickers,
                          comparison_data=comparison_data)
 
-@app.route('/admin')
-@admin_required
-def admin():
-    """Admin dashboard for managing top assets"""
-    try:
-        # Get current configurations
-        top_stocks = TopAssetConfiguration.get_top_stocks()
-        top_crypto = TopAssetConfiguration.get_top_crypto()
-        
-        # Get available options
-        all_sp500 = analyzer.get_all_sp500_tickers()
-        from crypto_data import crypto_manager
-        all_crypto = crypto_manager.get_all_crypto_symbols()
-        
-        # Get statistics
-        total_sp500 = len(all_sp500)
-        total_crypto_available = len(all_crypto)
-        
-        return render_template('admin.html',
-                             top_stocks=top_stocks,
-                             top_crypto=top_crypto,
-                             all_sp500=all_sp500,
-                             all_crypto=all_crypto,
-                             total_sp500=total_sp500,
-                             total_crypto_available=total_crypto_available)
-    except Exception as e:
-        logging.error(f"Error in admin route: {e}")
-        return render_template('admin.html', error="Unable to load admin data")
 
-@app.route('/admin/update_top_stocks', methods=['POST'])
-@admin_required
-def admin_update_top_stocks():
-    """Update top stocks configuration"""
-    try:
-        data = request.get_json()
-        stock_list = data.get('stocks', [])
-        
-        # Validate stocks are in S&P 500
-        all_sp500 = analyzer.get_all_sp500_tickers()
-        invalid_stocks = [s for s in stock_list if s not in all_sp500]
-        
-        if invalid_stocks:
-            return {"success": False, "error": f"Invalid stocks: {invalid_stocks}"}
-        
-        # Update database
-        success = TopAssetConfiguration.set_top_stocks(stock_list, 'admin')
-        
-        if success:
-            # Sync analyzer
-            analyzer.set_top_stocks(stock_list)
-            return {"success": True, "message": f"Updated top stocks list to {len(stock_list)} stocks"}
-        else:
-            return {"success": False, "error": "Failed to update database"}
-            
-    except Exception as e:
-        logging.error(f"Error updating top stocks: {e}")
-        return {"success": False, "error": str(e)}
-
-@app.route('/admin/update_top_crypto', methods=['POST'])
-@admin_required
-def admin_update_top_crypto():
-    """Update top crypto configuration"""
-    try:
-        data = request.get_json()
-        crypto_list = data.get('crypto', [])
-        
-        # Validate crypto symbols
-        from crypto_data import crypto_manager
-        all_crypto = crypto_manager.get_all_crypto_symbols()
-        invalid_crypto = [c for c in crypto_list if c not in all_crypto]
-        
-        if invalid_crypto:
-            return {"success": False, "error": f"Invalid crypto: {invalid_crypto}"}
-        
-        # Update database
-        success = TopAssetConfiguration.set_top_crypto(crypto_list, 'admin')
-        
-        if success:
-            # Sync crypto manager
-            crypto_manager.set_top_crypto(crypto_list)
-            return {"success": True, "message": f"Updated top crypto list to {len(crypto_list)} cryptocurrencies"}
-        else:
-            return {"success": False, "error": "Failed to update database"}
-            
-    except Exception as e:
-        logging.error(f"Error updating top crypto: {e}")
-        return {"success": False, "error": str(e)}
-
-@app.route('/admin/reset_defaults', methods=['POST'])
-@admin_required
-def admin_reset_defaults():
-    """Reset to default configurations"""
-    try:
-        data = request.get_json()
-        asset_type = data.get('asset_type')
-        
-        if asset_type == 'stocks':
-            success = TopAssetConfiguration.set_top_stocks(analyzer.DEFAULT_TOP_STOCKS, 'admin_reset')
-            if success:
-                analyzer.reset_to_default_top_stocks()
-                return {"success": True, "message": "Reset to default top 20 stocks"}
-        elif asset_type == 'crypto':
-            from crypto_data import crypto_manager
-            success = TopAssetConfiguration.set_top_crypto(crypto_manager.DEFAULT_TOP_CRYPTO, 'admin_reset')
-            if success:
-                crypto_manager.reset_to_default_top_crypto()
-                return {"success": True, "message": "Reset to default top 10 crypto"}
-        
-        return {"success": False, "error": "Invalid asset type or update failed"}
-        
-    except Exception as e:
-        logging.error(f"Error resetting defaults: {e}")
-        return {"success": False, "error": str(e)}
 
 @app.route('/settings', methods=['GET', 'POST'])
-@login_required
 def settings():
     """Settings page for configuring thresholds and preferences"""
     settings = get_user_settings()
@@ -708,7 +534,6 @@ def settings():
     return render_template('settings.html', settings=settings, all_sectors=all_filters)
 
 @app.route('/export/csv')
-@login_required
 def export_csv():
     """Export current support data as CSV"""
     try:

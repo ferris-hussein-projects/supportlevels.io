@@ -2,7 +2,6 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 from datetime import datetime
 import json
-from werkzeug.security import generate_password_hash, check_password_hash
 
 class Base(DeclarativeBase):
     pass
@@ -10,37 +9,7 @@ class Base(DeclarativeBase):
 db = SQLAlchemy(model_class=Base)
 
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
-    @classmethod
-    def create_default_users(cls):
-        """Create default users if they don't exist"""
-        # Create admin user
-        admin = cls.query.filter_by(username='hussef01').first()
-        if not admin:
-            admin = cls(username='hussef01', is_admin=True)
-            admin.set_password('01hussef')
-            db.session.add(admin)
-
-        # Create demo user
-        demo = cls.query.filter_by(username='demo').first()
-        if not demo:
-            demo = cls(username='demo', is_admin=False)
-            demo.set_password('demo123')
-            db.session.add(demo)
-
-        db.session.commit()
 
 
 class UserSettings(db.Model):
