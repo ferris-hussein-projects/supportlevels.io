@@ -161,11 +161,11 @@
                     <div class="d-flex gap-2 align-items-center">
                         <!-- Level Type Toggle -->
                         <div class="btn-group" role="group" aria-label="Level type toggle">
-                            <a href="{{ url_for('index', level_type='support', sort=sort_by, order=sort_order, sector=sector_filter) }}" 
+                            <a href="{{ url_for('analysis', level_type='support', sort=sort_by, order=sort_order, sector=sector_filter) }}" 
                                class="btn btn-sm {% if level_type == 'support' %}btn-success{% else %}btn-outline-success{% endif %}">
                                 <i data-feather="trending-down" class="me-1"></i>Support
                             </a>
-                            <a href="{{ url_for('index', level_type='resistance', sort=sort_by, order=sort_order, sector=sector_filter) }}" 
+                            <a href="{{ url_for('analysis', level_type='resistance', sort=sort_by, order=sort_order, sector=sector_filter) }}" 
                                class="btn btn-sm {% if level_type == 'resistance' %}btn-danger{% else %}btn-outline-danger{% endif %}">
                                 <i data-feather="trending-up" class="me-1"></i>Resistance
                             </a>
@@ -180,11 +180,11 @@
                     <div class="d-flex gap-2 align-items-center">
                         <!-- Level Type Toggle -->
                         <div class="btn-group" role="group" aria-label="Level type toggle">
-                            <a href="{{ url_for('index', level_type='support', sort=sort_by, order=sort_order, sector=sector_filter) }}" 
+                            <a href="{{ url_for('analysis', level_type='support', sort=sort_by, order=sort_order, sector=sector_filter) }}" 
                                class="btn btn-sm {% if level_type == 'support' %}btn-success{% else %}btn-outline-success{% endif %}">
                                 <i data-feather="trending-down" class="me-1"></i>Support
                             </a>
-                            <a href="{{ url_for('index', level_type='resistance', sort=sort_by, order=sort_order, sector=sector_filter) }}" 
+                            <a href="{{ url_for('analysis', level_type='resistance', sort=sort_by, order=sort_order, sector=sector_filter) }}" 
                                class="btn btn-sm {% if level_type == 'resistance' %}btn-danger{% else %}btn-outline-danger{% endif %}">
                                 <i data-feather="trending-up" class="me-1"></i>Resistance
                             </a>
@@ -227,13 +227,13 @@
                         <thead class="table-dark">
 
 <th scope="col">
-                                <a href="{{ url_for('index', sort='ticker', order='asc' if sort_by != 'ticker' or sort_order == 'desc' else 'desc', sector=sector_filter, level_type=level_type) }}" 
+                                <a href="{{ url_for('analysis', sort='ticker', order='asc' if sort_by != 'ticker' or sort_order == 'desc' else 'desc', sector=sector_filter, level_type=level_type) }}" 
                                    class="text-decoration-none">
                                     Asset <i data-feather="arrow-up-down" class="ms-1"></i>
                                 </a>
                             </th>
                             <th scope="col">
-                                <a href="{{ url_for('index', sort='price', order='asc' if sort_by != 'price' or sort_order == 'desc' else 'desc', sector=sector_filter, level_type=level_type) }}" 
+                                <a href="{{ url_for('analysis', sort='price', order='asc' if sort_by != 'price' or sort_order == 'desc' else 'desc', sector=sector_filter, level_type=level_type) }}" 
                                    class="text-decoration-none">
                                     Price <i data-feather="arrow-up-down" class="ms-1"></i>
                                 </a>
@@ -250,13 +250,13 @@
                             <th scope="col">Actions</th>
 
 <th scope="col">
-                                <a href="{{ url_for('index', sort='ticker', order='asc' if sort_by != 'ticker' or sort_order == 'desc' else 'desc', sector=sector_filter, level_type=level_type) }}" 
+                                <a href="{{ url_for('analysis', sort='ticker', order='asc' if sort_by != 'ticker' or sort_order == 'desc' else 'desc', sector=sector_filter, level_type=level_type) }}" 
                                    class="text-decoration-none">
                                     Asset <i data-feather="arrow-up-down" class="ms-1"></i>
                                 </a>
                             </th>
                             <th scope="col">
-                                <a href="{{ url_for('index', sort='price', order='asc' if sort_by != 'price' or sort_order == 'desc' else 'desc', sector=sector_filter, level_type=level_type) }}" 
+                                <a href="{{ url_for('analysis', sort='price', order='asc' if sort_by != 'price' or sort_order == 'desc' else 'desc', sector=sector_filter, level_type=level_type) }}" 
                                    class="text-decoration-none">
                                     Price <i data-feather="arrow-up-down" class="ms-1"></i>
                                 </a>

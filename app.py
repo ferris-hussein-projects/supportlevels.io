@@ -202,7 +202,7 @@ def logout():
 
 @app.route('/')
 def index():
-    """Simple root endpoint for health checks and redirect to dashboard"""
+    """Simple root endpoint for health checks and redirect to analysis"""
     # If no user session, return simple health check response for deployment
     if 'user_id' not in session:
         # Check if this is a health check request (no browser headers)
@@ -211,6 +211,9 @@ def index():
             return {"status": "ok", "app": "Stock Analyzer"}, 200
         # For real users, redirect to login
         return redirect(url_for('login'))
+    
+    # For logged-in users, redirect to analysis page
+    return redirect(url_for('analysis'))
     
     
 
