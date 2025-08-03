@@ -4,6 +4,8 @@ import numpy as np
 from datetime import datetime, timedelta
 import logging
 from typing import Dict, List, Optional
+import threading
+import time
 
 class StockAnalyzer:
     def __init__(self):
@@ -36,7 +38,18 @@ class StockAnalyzer:
 
         # Current active top stocks (configurable)
         self._top_stocks = self.DEFAULT_TOP_STOCKS.copy()
+        
+        # Data cache system
+        self._data_cache = {}
+        self._cache_timestamp = None
+        self._cache_lock = threading.Lock()
+        self._cache_expiry_hours = 4  # Cache expires after 4 hours
+        self._is_cache_warming = False
+        
         logging.info(f"Loaded {len(self.ALL_SP500_TICKERS)} S&P 500 stocks, tracking top {len(self._top_stocks)}")
+        
+        # Start cache warming in background
+        self._warm_cache_async()
 
     def _load_sp500_tickers(self) -> List[str]:
         """Load all S&P 500 tickers from Wikipedia"""
@@ -120,6 +133,86 @@ class StockAnalyzer:
         """Reset to default top 20 stocks"""
         self._top_stocks = self.DEFAULT_TOP_STOCKS.copy()
         logging.info("Reset to default top 20 stocks")
+        # Warm cache with new stock list
+        self._warm_cache_async()
+    
+    def _warm_cache_async(self):
+        """Start cache warming in background thread"""
+        if not self._is_cache_warming:
+            thread = threading.Thread(target=self._warm_cache, daemon=True)
+            thread.start()
+    
+    def _warm_cache(self):
+        """Warm the cache with stock data at startup"""
+        try:
+            self._is_cache_warming = True
+            logging.info("Starting cache warming...")
+            
+            # Warm cache for top stocks
+            for ticker in self._top_stocks:
+                try:
+                    self._fetch_and_cache_stock_data(ticker)
+                    time.sleep(0.1)  # Small delay to avoid hitting rate limits
+                except Exception as e:
+                    logging.error(f"Error caching data for {ticker}: {e}")
+                    continue
+            
+            self._cache_timestamp = datetime.now()
+            logging.info(f"Cache warming completed for {len(self._top_stocks)} stocks")
+            
+        except Exception as e:
+            logging.error(f"Error during cache warming: {e}")
+        finally:
+            self._is_cache_warming = False
+    
+    def _fetch_and_cache_stock_data(self, ticker):
+        """Fetch and cache stock data for a ticker"""
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period="5y")
+            
+            if not hist.empty:
+                with self._cache_lock:
+                    self._data_cache[ticker] = {
+                        'history': hist,
+                        'timestamp': datetime.now()
+                    }
+                logging.debug(f"Cached data for {ticker}")
+        except Exception as e:
+            logging.error(f"Error fetching data for {ticker}: {e}")
+    
+    def _get_cached_data(self, ticker):
+        """Get cached data for a ticker, or fetch if not available"""
+        with self._cache_lock:
+            # Check if we have cached data
+            if ticker in self._data_cache:
+                cached_data = self._data_cache[ticker]
+                # Check if cache is still valid (within expiry time)
+                if self._cache_timestamp and (datetime.now() - self._cache_timestamp).seconds < (self._cache_expiry_hours * 3600):
+                    return cached_data['history']
+            
+            # Cache miss or expired - fetch new data
+            try:
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period="5y")
+                
+                if not hist.empty:
+                    self._data_cache[ticker] = {
+                        'history': hist,
+                        'timestamp': datetime.now()
+                    }
+                    return hist
+                else:
+                    return None
+            except Exception as e:
+                logging.error(f"Error fetching data for {ticker}: {e}")
+                return None
+    
+    def _is_cache_valid(self):
+        """Check if cache is still valid"""
+        if not self._cache_timestamp:
+            return False
+        return (datetime.now() - self._cache_timestamp).seconds < (self._cache_expiry_hours * 3600)
 
     def calculate_rsi(self, prices, window=14):
         """Calculate Relative Strength Index"""
@@ -171,11 +264,10 @@ class StockAnalyzer:
     def check_support(self, ticker, threshold=0.001):
         """Check if stock is near historical support levels (1M, 6M, 1Y, 5Y)"""
         try:
-            stock = yf.Ticker(ticker)
-            # Get 5 years of data to calculate all support levels
-            hist = stock.history(period="5y")
+            # Use cached data instead of fetching every time
+            hist = self._get_cached_data(ticker)
 
-            if hist.empty or len(hist) < 30:
+            if hist is None or hist.empty or len(hist) < 30:
                 return {'ticker': ticker, 'price': None, 'zones': 'Insufficient data', 'error': True}
 
             closes = hist["Close"]
@@ -239,11 +331,10 @@ class StockAnalyzer:
     def check_resistance(self, ticker, threshold=0.001):
         """Check if stock is near historical resistance levels (1M, 6M, 1Y, 5Y)"""
         try:
-            stock = yf.Ticker(ticker)
-            # Get 5 years of data to calculate all resistance levels
-            hist = stock.history(period="5y")
+            # Use cached data instead of fetching every time
+            hist = self._get_cached_data(ticker)
 
-            if hist.empty or len(hist) < 30:
+            if hist is None or hist.empty or len(hist) < 30:
                 return {'ticker': ticker, 'price': None, 'zones': 'Insufficient data', 'error': True}
 
             closes = hist["Close"]
@@ -686,11 +777,15 @@ class StockAnalyzer:
     def get_detailed_analysis(self, ticker):
         """Get detailed technical analysis for a stock"""
         try:
+            # Use cached data for history, but still fetch info directly for latest details
+            hist = self._get_cached_data(ticker)
+            if hist is not None and len(hist) >= 252:  # If we have enough cached data, use last year
+                hist = hist.tail(252)  # Use last 252 days (1 year)
+            
             stock = yf.Ticker(ticker)
-            hist = stock.history(period="1y")
             info = stock.info
 
-            if hist.empty:
+            if hist is None or hist.empty:
                 return {'error': 'No historical data available for this ticker'}
 
             closes = hist["Close"]

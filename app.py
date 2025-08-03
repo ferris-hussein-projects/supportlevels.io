@@ -198,7 +198,8 @@ def index():
         
         # Sort results safely
         try:
-            results = sort_stocks(results, sort_by, sort_order)
+            if results:  # Only sort if we have results
+                results = sort_stocks(results, sort_by, sort_order)
         except Exception as sort_error:
             logging.error(f"Error sorting results: {sort_error}")
             results = []

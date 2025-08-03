@@ -4,11 +4,20 @@ import numpy as np
 from datetime import datetime, timedelta
 import logging
 from typing import Dict, List, Optional
+import threading
+import time
 
 class CryptoDataManager:
     """Manages cryptocurrency data and analysis with configurable top crypto system"""
     
     def __init__(self):
+        # Data cache system for crypto
+        self._crypto_cache = {}
+        self._crypto_cache_timestamp = None
+        self._crypto_cache_lock = threading.Lock()
+        self._crypto_cache_expiry_hours = 4  # Cache expires after 4 hours
+        self._is_crypto_cache_warming = False
+        
         # Comprehensive list of popular cryptocurrencies available on Yahoo Finance
         self.ALL_CRYPTO_SYMBOLS = {
             # Major Store of Value / Digital Gold
@@ -100,6 +109,9 @@ class CryptoDataManager:
         self._top_crypto = self.DEFAULT_TOP_CRYPTO.copy()
         logging.info(f"Loaded {len(self.ALL_CRYPTO_SYMBOLS)} crypto symbols, tracking top {len(self._top_crypto)}")
         
+        # Start crypto cache warming in background
+        self._warm_crypto_cache_async()
+        
     def get_all_crypto_symbols(self) -> List[str]:
         """Get all cryptocurrency symbols"""
         return list(self.ALL_CRYPTO_SYMBOLS.keys())
@@ -144,6 +156,80 @@ class CryptoDataManager:
         """Reset to default top 10 crypto"""
         self._top_crypto = self.DEFAULT_TOP_CRYPTO.copy()
         logging.info("Reset to default top 10 crypto")
+        # Warm cache with new crypto list
+        self._warm_crypto_cache_async()
+    
+    def _warm_crypto_cache_async(self):
+        """Start crypto cache warming in background thread"""
+        if not self._is_crypto_cache_warming:
+            thread = threading.Thread(target=self._warm_crypto_cache, daemon=True)
+            thread.start()
+    
+    def _warm_crypto_cache(self):
+        """Warm the cache with crypto data at startup"""
+        try:
+            self._is_crypto_cache_warming = True
+            logging.info("Starting crypto cache warming...")
+            
+            # Warm cache for top crypto
+            for symbol in self._top_crypto:
+                try:
+                    self._fetch_and_cache_crypto_data(symbol)
+                    time.sleep(0.1)  # Small delay to avoid hitting rate limits
+                except Exception as e:
+                    logging.error(f"Error caching crypto data for {symbol}: {e}")
+                    continue
+            
+            self._crypto_cache_timestamp = datetime.now()
+            logging.info(f"Crypto cache warming completed for {len(self._top_crypto)} cryptocurrencies")
+            
+        except Exception as e:
+            logging.error(f"Error during crypto cache warming: {e}")
+        finally:
+            self._is_crypto_cache_warming = False
+    
+    def _fetch_and_cache_crypto_data(self, symbol):
+        """Fetch and cache crypto data for a symbol"""
+        try:
+            crypto = yf.Ticker(symbol)
+            hist = crypto.history(period="5y")
+            
+            if not hist.empty:
+                with self._crypto_cache_lock:
+                    self._crypto_cache[symbol] = {
+                        'history': hist,
+                        'timestamp': datetime.now()
+                    }
+                logging.debug(f"Cached crypto data for {symbol}")
+        except Exception as e:
+            logging.error(f"Error fetching crypto data for {symbol}: {e}")
+    
+    def _get_cached_crypto_data(self, symbol):
+        """Get cached crypto data for a symbol, or fetch if not available"""
+        with self._crypto_cache_lock:
+            # Check if we have cached data
+            if symbol in self._crypto_cache:
+                cached_data = self._crypto_cache[symbol]
+                # Check if cache is still valid (within expiry time)
+                if self._crypto_cache_timestamp and (datetime.now() - self._crypto_cache_timestamp).seconds < (self._crypto_cache_expiry_hours * 3600):
+                    return cached_data['history']
+            
+            # Cache miss or expired - fetch new data
+            try:
+                crypto = yf.Ticker(symbol)
+                hist = crypto.history(period="5y")
+                
+                if not hist.empty:
+                    self._crypto_cache[symbol] = {
+                        'history': hist,
+                        'timestamp': datetime.now()
+                    }
+                    return hist
+                else:
+                    return None
+            except Exception as e:
+                logging.error(f"Error fetching crypto data for {symbol}: {e}")
+                return None
     
     def get_crypto_info(self, symbol: str) -> Dict:
         """Get detailed cryptocurrency information"""
@@ -175,11 +261,10 @@ class CryptoDataManager:
     def check_crypto_support(self, symbol: str, threshold: float = 0.03) -> Dict:
         """Check if cryptocurrency is near historical support levels (1M, 6M, 1Y, 5Y)"""
         try:
-            crypto = yf.Ticker(symbol)
-            # Get 5 years of data to calculate all support levels
-            hist = crypto.history(period="5y")
+            # Use cached crypto data instead of fetching every time
+            hist = self._get_cached_crypto_data(symbol)
             
-            if hist.empty or len(hist) < 30:
+            if hist is None or hist.empty or len(hist) < 30:
                 return {'symbol': symbol, 'price': None, 'zones': 'Insufficient data', 'error': True}
             
             closes = hist["Close"]
@@ -334,6 +419,109 @@ class CryptoDataManager:
         except Exception:
             return None
     
+    def check_crypto_resistance(self, symbol: str, threshold: float = 0.03) -> Dict:
+        """Check if cryptocurrency is near historical resistance levels (1M, 6M, 1Y, 5Y)"""
+        try:
+            # Use cached crypto data instead of fetching every time
+            hist = self._get_cached_crypto_data(symbol)
+            
+            if hist is None or hist.empty or len(hist) < 30:
+                return {'symbol': symbol, 'price': None, 'zones': 'Insufficient data', 'error': True}
+            
+            closes = hist["Close"]
+            current_price = closes.iloc[-1]
+            
+            # Calculate resistance levels based on historical highs in different timeframes
+            resistance_1m = self._calculate_crypto_period_resistance(closes, 30)  # ~1 month
+            resistance_6m = self._calculate_crypto_period_resistance(closes, 180)  # ~6 months  
+            resistance_1y = self._calculate_crypto_period_resistance(closes, 365)  # ~1 year
+            resistance_5y = self._calculate_crypto_period_resistance(closes, len(closes))  # All available data
+            
+            zones = []
+            resistance_prices = []
+            
+            # Check if current price is near each resistance level
+            resistance_levels = [
+                (resistance_1m, '1M Resistance'),
+                (resistance_6m, '6M Resistance'), 
+                (resistance_1y, '1Y Resistance'),
+                (resistance_5y, '5Y Resistance')
+            ]
+            
+            for resistance_price, period in resistance_levels:
+                if resistance_price and current_price < resistance_price:  # Price must be below resistance
+                    distance_from_resistance = (resistance_price - current_price) / resistance_price
+                    if distance_from_resistance <= threshold:
+                        zones.append(period)
+                        resistance_prices.append(round(resistance_price, 4))
+            
+            resistance_prices_str = ', '.join([f"${price}" for price in resistance_prices]) if resistance_prices else '—'
+            
+            # Generate TradingView link if crypto is near resistance
+            tradingview_link = None
+            if zones:
+                tradingview_symbol = self._get_tradingview_crypto_symbol(symbol)
+                tradingview_link = f"https://www.tradingview.com/chart/?symbol={tradingview_symbol}"
+            
+            # Get crypto info
+            crypto_info = self.get_crypto_info(symbol)
+            
+            return {
+                'ticker': symbol,
+                'symbol': symbol,
+                'price': round(current_price, 4),
+                'zones': ', '.join(zones) or '—',
+                'resistance_prices': resistance_prices_str,
+                'resistance_levels': resistance_prices,
+                'resistance_1m': round(resistance_1m, 4) if resistance_1m else None,
+                'resistance_6m': round(resistance_6m, 4) if resistance_6m else None,
+                'resistance_1y': round(resistance_1y, 4) if resistance_1y else None,
+                'resistance_5y': round(resistance_5y, 4) if resistance_5y else None,
+                'volume': int(hist["Volume"].iloc[-1]) if not hist["Volume"].empty else None,
+                'sector': crypto_info['category'],
+                'company_name': crypto_info['name'],
+                'industry': 'Cryptocurrency',
+                'is_halal': True,
+                'tradingview_link': tradingview_link,
+                'error': False,
+                'asset_type': 'crypto'
+            }
+        except Exception as e:
+            logging.error(f"Error checking resistance for {symbol}: {e}")
+            crypto_info = self.get_crypto_info(symbol)
+            return {
+                'ticker': symbol, 
+                'symbol': symbol,
+                'price': None, 
+                'zones': 'Error fetching data', 
+                'sector': crypto_info['category'],
+                'company_name': crypto_info['name'],
+                'industry': 'Cryptocurrency',
+                'error': True,
+                'asset_type': 'crypto'
+            }
+    
+    def _calculate_crypto_period_resistance(self, closes, lookback_days):
+        """Calculate resistance level for a given period using highest high and key resistance zones"""
+        try:
+            if len(closes) < lookback_days:
+                lookback_days = len(closes)
+            
+            period_data = closes.tail(lookback_days)
+            
+            # Find the highest high in the period
+            period_high = period_data.max()
+            
+            # Also consider areas where price has been rejected multiple times (resistance zones)
+            # Calculate resistance as the 85th percentile of prices in the period (crypto is more volatile)
+            resistance_zone = period_data.quantile(0.85)
+            
+            # Return the lower of the two (more conservative resistance)
+            return min(period_high, resistance_zone)
+            
+        except Exception:
+            return None
+
     def get_cryptos_near_support(self, threshold: float = 0.03) -> List[Dict]:
         """Get cryptocurrencies approaching support levels (from top crypto list only)"""
         results = []
@@ -346,6 +534,22 @@ class CryptoDataManager:
                     results.append(result)
             except Exception as e:
                 logging.error(f"Error processing {symbol}: {e}")
+                continue
+        
+        return results
+    
+    def get_cryptos_near_resistance(self, threshold: float = 0.03) -> List[Dict]:
+        """Get cryptocurrencies approaching resistance levels (from top crypto list only)"""
+        results = []
+        
+        # Use top crypto list for analysis
+        for symbol in self._top_crypto:
+            try:
+                result = self.check_crypto_resistance(symbol, threshold)
+                if not result['error'] and result['zones'] not in (None, '', '—'):
+                    results.append(result)
+            except Exception as e:
+                logging.error(f"Error processing resistance for {symbol}: {e}")
                 continue
         
         return results
