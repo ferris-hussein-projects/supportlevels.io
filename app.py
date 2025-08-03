@@ -110,11 +110,11 @@ def sort_stocks(results, sort_by='ticker', sort_order='asc'):
     
     try:
         # Add popularity scores to results
-        for i, result in enumerate(results):
+        for i, result_item in enumerate(results):
             try:
-                if result and isinstance(result, dict) and 'ticker' in result:
+                if result_item and isinstance(result_item, dict) and 'ticker' in result_item:
                     # Make a copy to avoid modifying the original
-                    result_copy = result.copy()
+                    result_copy = result_item.copy()
                     
                     # Safely get popularity score
                     try:
@@ -140,7 +140,7 @@ def sort_stocks(results, sort_by='ticker', sort_order='asc'):
                     valid_results.append(result_copy)
                 else:
                     # Skip invalid results
-                    logging.warning(f"Invalid result at index {i} in sort_stocks: {result}")
+                    logging.warning(f"Invalid result at index {i} in sort_stocks: {result_item}")
                     continue
             except Exception as e:
                 logging.error(f"Error processing result at index {i} in sort_stocks: {e}")

@@ -100,6 +100,15 @@ function loadFavoriteStatuses() {
         });
 }
 
+// Define loadFavoriteStatuses function
+function loadFavoriteStatuses() {
+    loadFavorites();
+}
+        .catch(error => {
+            console.error('Error loading favorites:', error);
+        });
+}
+
 // Load favorite statuses on page load
 document.addEventListener('DOMContentLoaded', function() {
     // Only load favorites if we have favorite buttons on the page
