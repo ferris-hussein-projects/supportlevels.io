@@ -223,10 +223,14 @@ def index():
         # Simplified crypto summary (all crypto under "Crypto")
         sector_summary['Crypto'] = len(crypto_manager.get_top_crypto())
         
+        # Calculate threshold for template (use support_threshold for display)
+        current_threshold = support_threshold if level_type == 'support' else resistance_threshold
+        
         return render_template('index.html', 
                              results=results, 
                              support_threshold=support_threshold * 100,  # Convert back to percentage
                              resistance_threshold=resistance_threshold * 100,  # Convert back to percentage
+                             threshold=current_threshold * 100,  # Add threshold for template compatibility
                              level_type=level_type,
                              total_stocks_available=total_stocks_available,
                              total_stocks_tracked=total_stocks_tracked,
@@ -247,6 +251,7 @@ def index():
                              results=[], 
                              support_threshold=0.1,
                              resistance_threshold=0.1,
+                             threshold=0.1,  # Add threshold for template compatibility
                              level_type='support',
                              total_stocks_available=0,
                              total_stocks_tracked=0,
