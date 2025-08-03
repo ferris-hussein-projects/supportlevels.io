@@ -230,7 +230,6 @@
                                 </th>
                                 <th>Support Timeframes</th>
                                 <th>Support Prices</th>
-                                <th>Halal</th>
                                 <th>
                                     <a href="?sort=popularity&order={{ 'desc' if sort_by == 'popularity' and sort_order == 'asc' else 'asc' }}{% if sector_filter and sector_filter != 'All' %}&sector={{ sector_filter }}{% endif %}" 
                                        class="text-decoration-none text-white">
@@ -292,15 +291,6 @@
                                 </td>
                                 <td>
                                     <strong class="text-success">{{ stock.support_prices or '—' }}</strong>
-                                </td>
-                                <td>
-                                    {% if stock.asset_type == 'crypto' %}
-                                        <span class="badge bg-success">✓ Halal</span>
-                                    {% elif stock.is_halal %}
-                                        <span class="badge bg-success">✓ Halal</span>
-                                    {% else %}
-                                        <span class="badge bg-warning">⚠ Non-Halal</span>
-                                    {% endif %}
                                 </td>
                                 <td>
                                     <div class="d-flex align-items-center gap-1">
