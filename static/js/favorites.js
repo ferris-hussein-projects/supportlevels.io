@@ -80,12 +80,18 @@ function loadFavoriteStatuses() {
 
             // Update favorite button states
             document.querySelectorAll('.favorite-btn').forEach(btn => {
-                const ticker = btn.getAttribute('data-ticker');
-                if (ticker) {
-                    const isFavorite = favorites.includes(ticker);
-                    btn.classList.toggle('favorited', isFavorite);
-                    btn.innerHTML = isFavorite ? '★' : '☆';
-                    btn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+                try {
+                    const ticker = btn.getAttribute('data-ticker') || btn.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+                    if (ticker) {
+                        const isFavorite = favorites.includes(ticker);
+                        if (btn.classList) {
+                            btn.classList.toggle('favorited', isFavorite);
+                        }
+                        btn.style.color = isFavorite ? '#ffc107' : '';
+                        btn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+                    }
+                } catch (error) {
+                    console.error('Error updating favorite button:', error);
                 }
             });
         })

@@ -109,32 +109,35 @@ def sort_stocks(results, sort_by='ticker', sort_order='asc'):
     valid_results = []
     
     # Add popularity scores to results
-    for result in results:
+    for i, result in enumerate(results):
         try:
             if result and isinstance(result, dict) and 'ticker' in result:
-                result['popularity'] = StockPopularity.get_popularity_score(result['ticker'])
+                # Make a copy to avoid modifying the original
+                result_copy = result.copy()
+                result_copy['popularity'] = StockPopularity.get_popularity_score(result_copy['ticker'])
+                
                 # Calculate distance from nearest support level
                 try:
-                    price = float(result.get('price', 0))
+                    price = float(result_copy.get('price', 0))
                     distances = []
-                    if result.get('ma21'):
-                        distances.append(abs(price - float(result['ma21'])) / float(result['ma21']))
-                    if result.get('ma50'):
-                        distances.append(abs(price - float(result['ma50'])) / float(result['ma50']))
-                    if result.get('ma200'):
-                        distances.append(abs(price - float(result['ma200'])) / float(result['ma200']))
-                    result['distance'] = min(distances) if distances else 0
+                    if result_copy.get('ma21'):
+                        distances.append(abs(price - float(result_copy['ma21'])) / float(result_copy['ma21']))
+                    if result_copy.get('ma50'):
+                        distances.append(abs(price - float(result_copy['ma50'])) / float(result_copy['ma50']))
+                    if result_copy.get('ma200'):
+                        distances.append(abs(price - float(result_copy['ma200'])) / float(result_copy['ma200']))
+                    result_copy['distance'] = min(distances) if distances else 0
                 except (ValueError, TypeError):
-                    result['distance'] = 0
+                    result_copy['distance'] = 0
                 
                 # Add to valid results only if processing was successful
-                valid_results.append(result)
+                valid_results.append(result_copy)
             else:
                 # Skip invalid results
-                logging.warning(f"Invalid result in sort_stocks: {result}")
+                logging.warning(f"Invalid result at index {i} in sort_stocks: {result}")
                 continue
         except Exception as e:
-            logging.error(f"Error processing result in sort_stocks: {e}")
+            logging.error(f"Error processing result at index {i} in sort_stocks: {e}")
             continue
     
     # Define sort key
