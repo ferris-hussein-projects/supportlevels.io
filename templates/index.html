@@ -1,7 +1,4 @@
-This code modifies the Jinja2 template to include toggles for support and resistance levels and color-codes the displayed data accordingly.
-```
-
-```html
+html
 {% extends "base.html" %}
 
 {% block title %}Support Tracker - Stock Support Tracker{% endblock %}
@@ -144,7 +141,7 @@ This code modifies the Jinja2 template to include toggles for support and resist
         {% endif %}
 
         {% if results %}
-        
+
 <div class="card">
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -219,7 +216,7 @@ This code modifies the Jinja2 template to include toggles for support and resist
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead class="table-dark">
-                            
+
 <th scope="col">
                                 <a href="{{ url_for('index', sort='ticker', order='asc' if sort_by != 'ticker' or sort_order == 'desc' else 'desc', sector=sector_filter, level_type=level_type) }}" 
                                    class="text-decoration-none">
@@ -302,7 +299,7 @@ This code modifies the Jinja2 template to include toggles for support and resist
                                         {% endif %}
                                     </strong>
                                 </td>
-                                
+
 <td>
                                 <span class="badge {% if level_type == 'support' %}bg-success{% else %}bg-danger{% endif %}">{{ result.zones }}</span>
                             </td>

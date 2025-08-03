@@ -128,9 +128,32 @@
     <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
 
-    <!-- Initialize Feather Icons -->
+    <!-- Initialize Feather Icons and App functionality -->
     <script>
-        feather.replace();
+        // Initialize everything when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Feather icons
+            feather.replace();
+
+            // Initialize Bootstrap tooltips
+            if (typeof bootstrap !== 'undefined') {
+                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                });
+            }
+
+            // Update last updated timestamp
+            const lastUpdatedElement = document.getElementById('lastUpdated');
+            if (lastUpdatedElement) {
+                lastUpdatedElement.textContent = new Date().toLocaleString();
+            }
+
+            // Load favorites on page load
+            if (typeof loadFavoriteStatuses === 'function') {
+                loadFavoriteStatuses();
+            }
+        });
 
         // Register Service Worker for PWA
         if ('serviceWorker' in navigator) {
@@ -142,24 +165,6 @@
                 });
             });
         }
-
-        // Update last updated timestamp
-        document.addEventListener('DOMContentLoaded', function() {
-            const lastUpdatedElement = document.getElementById('lastUpdated');
-            if (lastUpdatedElement) {
-                lastUpdatedElement.textContent = new Date().toLocaleString();
-            }
-        });
-    </script>
-
-    <script>
-        feather.replace();
-
-        // Initialize tooltips if Bootstrap 5 is being used
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
 
         // Favorites functionality
         function loadFavoriteStatuses() {
@@ -207,11 +212,6 @@
             })
             .catch(error => console.log('Could not toggle favorite:', error));
         }
-
-        // Load favorites on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            loadFavoriteStatuses();
-        });
     </script>
 
     {% block scripts %}{% endblock %}
