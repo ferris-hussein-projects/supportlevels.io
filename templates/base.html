@@ -128,92 +128,28 @@
     <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
 
-    <!-- Initialize Feather Icons and App functionality -->
+    <!-- Load Feather Icons -->
+    <script src="https://unpkg.com/feather-icons"></script>
+
+    <!-- Custom JavaScript -->
+    <script src="{{ url_for('static', filename='js/favorites.js') }}"></script>
+
     <script>
-        // Initialize everything when DOM is loaded
+        // Initialize Feather icons
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize Feather icons
             feather.replace();
-
-            // Initialize Bootstrap tooltips
-            if (typeof bootstrap !== 'undefined') {
-                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-                var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                    return new bootstrap.Tooltip(tooltipTriggerEl);
-                });
-            }
-
-            // Update last updated timestamp
-            const lastUpdatedElement = document.getElementById('lastUpdated');
-            if (lastUpdatedElement) {
-                lastUpdatedElement.textContent = new Date().toLocaleString();
-            }
-
-            // Load favorites on page load
-            if (typeof loadFavoriteStatuses === 'function') {
-                loadFavoriteStatuses();
-            }
         });
 
-        // Register Service Worker for PWA
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('/sw.js').then(function(registration) {
-                    console.log('ServiceWorker registration successful');
-                }, function(err) {
-                    console.log('ServiceWorker registration failed: ', err);
-                });
-            });
-        }
-
-        // Favorites functionality
-        function loadFavoriteStatuses() {
-            fetch('/api/get_favorites')
-                .then(response => response.json())
-                .then(data => {
-                    const favorites = data.favorites || [];
-                    favorites.forEach(ticker => {
-                        const heartIcon = document.querySelector(`[data-ticker="${ticker}"] .heart-icon`);
-                        if (heartIcon && heartIcon.classList) {
-                            heartIcon.classList.add('favorited');
-                        }
-                    });
-                })
-                .catch(error => console.log('Could not load favorites:', error));
-        }
-
-        function toggleFavorite(ticker, assetType = 'stock') {
-            const heartIcon = document.querySelector(`[data-ticker="${ticker}"] .heart-icon`);
-            if (!heartIcon || !heartIcon.classList) return;
-
-            const isFavorited = heartIcon.classList.contains('favorited');
-            const action = isFavorited ? 'remove' : 'add';
-
-            fetch('/api/toggle_favorite', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    ticker: ticker,
-                    asset_type: assetType,
-                    action: action
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    if (action === 'add') {
-                        heartIcon.classList.add('favorited');
-                    } else {
-                        heartIcon.classList.remove('favorited');
-                    }
+        // Additional initialization for favorites (redundant safety check)
+        window.addEventListener('load', function() {
+            // Small delay to ensure favorites.js is fully loaded
+            setTimeout(function() {
+                if (window.loadFavoriteStatuses && typeof window.loadFavoriteStatuses === 'function') {
+                    window.loadFavoriteStatuses();
                 }
-            })
-            .catch(error => console.log('Could not toggle favorite:', error));
-        }
+            }, 100);
+        });
     </script>
-    <script src="{{ url_for('static', filename='js/favorites.js') }}"></script>
 
     {% block scripts %}{% endblock %}
 </body>

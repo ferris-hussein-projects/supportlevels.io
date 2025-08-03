@@ -220,11 +220,13 @@ def index():
         results = []
         data_fetch_error = None
         try:
+            logging.info(f"Fetching data with params: support_threshold={support_threshold}, resistance_threshold={resistance_threshold}, level_type={level_type}, sector_filter={sector_filter}")
             results = analyzer.get_stocks_near_levels(support_threshold, resistance_threshold, level_type, sector_filter, include_crypto=True)
             if not results:
                 results = []
+                logging.warning("No results returned from analyzer")
         except Exception as data_error:
-            logging.error(f"Error fetching stock data: {data_error}")
+            logging.error(f"Error fetching stock data: {data_error}", exc_info=True)
             data_fetch_error = str(data_error)
             results = []
         
@@ -450,15 +452,23 @@ def api_toggle_favorite():
     try:
         from models import UserFavorites
         data = request.get_json()
-        ticker = data.get('ticker', '').upper()
+        
+        if not data:
+            return {"success": False, "error": "No data provided"}, 400
+            
+        ticker = data.get('ticker', '').upper().strip()
         asset_type = data.get('asset_type', 'stock')
         action = data.get('action', 'add')
+        
+        if not ticker:
+            return {"success": False, "error": "Ticker is required"}, 400
         
         if action == 'add':
             success = UserFavorites.add_favorite(ticker, asset_type)
         else:
             success = UserFavorites.remove_favorite(ticker, asset_type)
         
+        logging.info(f"Favorite action: {action} {ticker} ({asset_type}) - Success: {success}")
         return {"success": success}
     except Exception as e:
         logging.error(f"Error toggling favorite: {e}")
@@ -470,7 +480,9 @@ def api_get_favorites():
     try:
         from models import UserFavorites
         favorites = UserFavorites.get_favorites()
-        return {"favorites": [fav['ticker'] for fav in favorites]}
+        favorite_tickers = [fav['ticker'] for fav in favorites] if favorites else []
+        logging.debug(f"Retrieved favorites: {favorite_tickers}")
+        return {"favorites": favorite_tickers}
     except Exception as e:
         logging.error(f"Error getting favorites: {e}")
         return {"favorites": []}, 500

@@ -178,8 +178,12 @@ class StockAnalyzer:
                         'timestamp': datetime.now()
                     }
                 logging.debug(f"Cached data for {ticker}")
+            else:
+                logging.warning(f"No historical data for {ticker}")
         except Exception as e:
             logging.error(f"Error fetching data for {ticker}: {e}")
+            # Don't let one failed ticker break the entire caching process
+            pass
     
     def _get_cached_data(self, ticker):
         """Get cached data for a ticker, or fetch if not available"""
@@ -473,6 +477,8 @@ class StockAnalyzer:
     def get_stocks_near_levels(self, support_threshold=0.001, resistance_threshold=0.001, level_type='support', sector_filter='All', include_crypto=True):
         """Get stocks and optionally crypto approaching support or resistance levels with filtering and favorites support"""
         results = []
+        
+        logging.info(f"Starting get_stocks_near_levels with {len(self._top_stocks)} top stocks")
 
         try:
             # Handle favorites filter

@@ -107,60 +107,83 @@ class UserFavorites(db.Model):
     def get_session_id():
         """Get or create session ID for guest users"""
         from flask import session
-        if 'user_session_id' not in session:
+        try:
+            if 'user_session_id' not in session:
+                import uuid
+                session['user_session_id'] = str(uuid.uuid4())
+            return session['user_session_id']
+        except Exception as e:
+            # Fallback to a default session if Flask session is not available
             import uuid
-            session['user_session_id'] = str(uuid.uuid4())
-        return session['user_session_id']
+            return str(uuid.uuid4())
 
     @staticmethod
     def add_favorite(ticker, asset_type):
         """Add a ticker to favorites"""
-        session_id = UserFavorites.get_session_id()
-        existing = UserFavorites.query.filter_by(
-            session_id=session_id,
-            ticker=ticker.upper(),
-            asset_type=asset_type
-        ).first()
-
-        if not existing:
-            favorite = UserFavorites(
+        try:
+            session_id = UserFavorites.get_session_id()
+            existing = UserFavorites.query.filter_by(
                 session_id=session_id,
                 ticker=ticker.upper(),
                 asset_type=asset_type
-            )
-            db.session.add(favorite)
-            db.session.commit()
-            return True
-        return False
+            ).first()
+
+            if not existing:
+                favorite = UserFavorites(
+                    session_id=session_id,
+                    ticker=ticker.upper(),
+                    asset_type=asset_type
+                )
+                db.session.add(favorite)
+                db.session.commit()
+                return True
+            return False
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error adding favorite {ticker}: {e}")
+            return False
 
     @staticmethod
     def remove_favorite(ticker, asset_type):
         """Remove a ticker from favorites"""
-        session_id = UserFavorites.get_session_id()
-        favorite = UserFavorites.query.filter_by(
-            session_id=session_id,
-            ticker=ticker.upper(),
-            asset_type=asset_type
-        ).first()
+        try:
+            session_id = UserFavorites.get_session_id()
+            favorite = UserFavorites.query.filter_by(
+                session_id=session_id,
+                ticker=ticker.upper(),
+                asset_type=asset_type
+            ).first()
 
-        if favorite:
-            db.session.delete(favorite)
-            db.session.commit()
-            return True
-        return False
+            if favorite:
+                db.session.delete(favorite)
+                db.session.commit()
+                return True
+            return False
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error removing favorite {ticker}: {e}")
+            return False
 
     @staticmethod
     def get_favorites():
         """Get all favorites for current user/session"""
-        session_id = UserFavorites.get_session_id()
-        favorites = UserFavorites.query.filter_by(session_id=session_id).all()
-        return [{'ticker': fav.ticker, 'asset_type': fav.asset_type} for fav in favorites]
+        try:
+            session_id = UserFavorites.get_session_id()
+            favorites = UserFavorites.query.filter_by(session_id=session_id).all()
+            return [{'ticker': fav.ticker, 'asset_type': fav.asset_type} for fav in favorites]
+        except Exception as e:
+            print(f"Error getting favorites: {e}")
+            return []
 
     @staticmethod
     def get_favorite_tickers():
         """Get list of favorite ticker symbols"""
-        favorites = UserFavorites.get_favorites()
-        return [fav['ticker'] for fav in favorites]
+        try:
+            favorites = UserFavorites.get_favorites()
+            return [fav['ticker'] for fav in favorites]
+        except Exception as e:
+            print(f"Error getting favorite tickers: {e}")
+            return []
 
 
 class TopAssetConfiguration(db.Model):
