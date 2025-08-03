@@ -306,7 +306,8 @@ class StockAnalyzer:
                 if support_price and current_price > support_price:  # Price must be above support
                     # Calculate how close price is to support (as percentage above support)
                     distance_from_support = (current_price - support_price) / support_price
-                    if distance_from_support <= threshold:  # Within threshold distance above support
+                    # Be more conservative: price should be close but not too close (risk of breaking)
+                    if 0.005 <= distance_from_support <= threshold:  # Minimum 0.5% buffer to avoid breaks
                         zones.append(period)
                         support_prices.append(round(support_price, 2))
 
@@ -374,7 +375,8 @@ class StockAnalyzer:
                 if resistance_price and current_price < resistance_price:  # Price must be below resistance
                     # Calculate how close price is to resistance (as percentage below resistance)
                     distance_from_resistance = (resistance_price - current_price) / resistance_price
-                    if distance_from_resistance <= threshold:  # Within threshold distance below resistance
+                    # Be more conservative: price should be close but not too close (risk of breaking)
+                    if 0.005 <= distance_from_resistance <= threshold:  # Minimum 0.5% buffer to avoid breaks
                         zones.append(period)
                         resistance_prices.append(round(resistance_price, 2))
 

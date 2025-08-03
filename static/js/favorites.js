@@ -21,7 +21,7 @@ function loadUserFavorites() {
         });
 }
 
-// Function to load favorite statuses
+// Function to load favorite statuses for all tickers on the page
 function loadFavoriteStatuses() {
     fetch('/api/get_favorites')
         .then(response => response.json())
@@ -142,3 +142,8 @@ function showToast(message, type = 'info') {
         }
     }, 3000);
 }
+
+// Initialize favorites when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadFavoriteStatuses();
+});
