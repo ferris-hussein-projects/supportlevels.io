@@ -202,9 +202,14 @@ def logout():
 
 @app.route('/')
 def index():
-    """Main page showing stocks approaching support or resistance levels"""
-    # Check if user is logged in, redirect to login if not
+    """Simple root endpoint for health checks and main page"""
+    # If no user session, return simple health check response for deployment
     if 'user_id' not in session:
+        # Check if this is a health check request (no browser headers)
+        user_agent = request.headers.get('User-Agent', '')
+        if not user_agent or 'bot' in user_agent.lower() or 'check' in user_agent.lower():
+            return {"status": "ok", "app": "Stock Analyzer"}, 200
+        # For real users, redirect to login
         return redirect(url_for('login'))
     
     try:
@@ -350,8 +355,7 @@ def landing():
 @app.route('/health')
 def health_check():
     """Simple health check endpoint for deployment"""
-    from datetime import datetime
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}, 200
+    return {"status": "healthy"}, 200
 
 @app.route('/debug')
 @login_required  
