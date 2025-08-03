@@ -249,9 +249,9 @@ def index():
         logging.error(f"Error in index route: {e}")
         return render_template('index.html', 
                              results=[], 
-                             support_threshold=0.1,
-                             resistance_threshold=0.1,
-                             threshold=0.1,  # Add threshold for template compatibility
+                             support_threshold=3.0,
+                             resistance_threshold=3.0,
+                             threshold=3.0,  # Add threshold for template compatibility
                              level_type='support',
                              total_stocks_available=0,
                              total_stocks_tracked=0,
