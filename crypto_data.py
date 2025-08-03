@@ -402,24 +402,71 @@ class CryptoDataManager:
             return f"BINANCE:{base_symbol}USDT"
 
     def _calculate_crypto_period_support(self, closes, lookback_days):
-        """Calculate support level for a given period using lowest low and key support zones"""
+        """Calculate support level using enhanced method for crypto (higher volatility considered)"""
         try:
             if len(closes) < lookback_days:
                 lookback_days = len(closes)
 
             period_data = closes.tail(lookback_days)
+            if len(period_data) < 10:
+                return None
 
-            # Find the lowest low in the period
+            # Get volume data if available
+            symbol = getattr(closes, 'name', 'UNKNOWN')
+            hist = self._get_cached_crypto_data(symbol)
+            volumes = None
+            if hist is not None and 'Volume' in hist.columns:
+                volumes = hist['Volume'].tail(lookback_days)
+
+            # Find pivot lows with larger window for crypto volatility
+            pivot_lows = self._find_crypto_pivot_lows(period_data, window=7)
+            
+            # Price clustering for crypto
+            price_clusters = self._find_crypto_price_clusters(period_data, volumes)
+            
+            # Traditional levels with crypto-adjusted percentiles
             period_low = period_data.min()
+            support_percentiles = [period_data.quantile(q) for q in [0.10, 0.15, 0.20]]
+            
+            # Combine supports with crypto-adjusted weights
+            all_supports = []
+            all_supports.extend([(price, 2.5) for price in pivot_lows])
+            all_supports.extend([(price, 2.0) for price in price_clusters])
+            all_supports.extend([(price, 1.0) for price in support_percentiles])
+            all_supports.append((period_low, 1.5))
+            
+            if not all_supports:
+                return period_low
+            
+            # Find most significant support (crypto-adjusted tolerance)
+            current_price = closes.iloc[-1]
+            significant_supports = []
+            
+            for price, weight in all_supports:
+                if price and price < current_price:
+                    test_count = self._count_crypto_support_tests(period_data, price, tolerance=0.03)  # Higher tolerance for crypto
+                    final_weight = weight * (1 + test_count * 0.3)
+                    significant_supports.append((price, final_weight))
+            
+            if not significant_supports:
+                return period_low
+            
+            # Return best weighted support
+            best_support = None
+            best_score = 0
+            
+            for price, weight in significant_supports:
+                distance_factor = max(0.1, 1 - abs(current_price - price) / current_price)
+                score = weight * distance_factor
+                
+                if score > best_score:
+                    best_score = score
+                    best_support = price
+            
+            return best_support if best_support else period_low
 
-            # Also consider areas where price has bounced multiple times (support zones)
-            # Calculate support as the 15th percentile of prices in the period (crypto is more volatile)
-            support_zone = period_data.quantile(0.15)
-
-            # Return the higher of the two (more conservative support)
-            return max(period_low, support_zone)
-
-        except Exception:
+        except Exception as e:
+            logging.error(f"Error in crypto support calculation: {e}")
             return None
 
     def check_crypto_resistance(self, symbol: str, threshold: float = 0.03) -> Dict:
@@ -503,6 +550,64 @@ class CryptoDataManager:
                 'error': True,
                 'asset_type': 'crypto'
             }
+
+    def _find_crypto_pivot_lows(self, prices, window=7):
+        """Find pivot lows in crypto data with adjusted window for volatility"""
+        pivot_lows = []
+        try:
+            for i in range(window, len(prices) - window):
+                current_price = prices.iloc[i]
+                is_pivot_low = True
+                
+                for j in range(i - window, i + window + 1):
+                    if j != i and prices.iloc[j] <= current_price:
+                        is_pivot_low = False
+                        break
+                
+                if is_pivot_low:
+                    pivot_lows.append(current_price)
+            
+            return pivot_lows
+        except Exception:
+            return []
+    
+    def _find_crypto_price_clusters(self, prices, volumes=None, num_clusters=3):
+        """Find price clusters for crypto with volatility adjustments"""
+        try:
+            price_range = prices.max() - prices.min()
+            if price_range == 0:
+                return []
+            
+            # Larger buckets for crypto volatility
+            bucket_size = price_range / 30  # 30 buckets instead of 50
+            price_counts = {}
+            
+            for i, price in enumerate(prices):
+                bucket = int((price - prices.min()) / bucket_size)
+                bucket_price = prices.min() + bucket * bucket_size
+                
+                weight = volumes.iloc[i] if volumes is not None else 1
+                price_counts[bucket_price] = price_counts.get(bucket_price, 0) + weight
+            
+            sorted_clusters = sorted(price_counts.items(), key=lambda x: x[1], reverse=True)
+            return [price for price, count in sorted_clusters[:num_clusters]]
+            
+        except Exception:
+            return []
+    
+    def _count_crypto_support_tests(self, prices, support_level, tolerance=0.03):
+        """Count support tests for crypto with higher tolerance"""
+        try:
+            test_count = 0
+            support_range = support_level * tolerance
+            
+            for price in prices:
+                if abs(price - support_level) <= support_range:
+                    test_count += 1
+            
+            return min(test_count, 8)  # Lower cap for crypto
+        except Exception:
+            return 0
 
     def _calculate_crypto_period_resistance(self, closes, lookback_days):
         """Calculate resistance level for a given period using highest high and key resistance zones"""

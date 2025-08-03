@@ -434,25 +434,142 @@ class StockAnalyzer:
             return f"NASDAQ:{ticker}"
 
     def _calculate_period_support(self, closes, lookback_days):
-        """Calculate support level for a given period using lowest low and key support zones"""
+        """Calculate support level using pivot lows, volume analysis, and price clustering"""
         try:
             if len(closes) < lookback_days:
                 lookback_days = len(closes)
 
             period_data = closes.tail(lookback_days)
+            if len(period_data) < 10:  # Need minimum data points
+                return None
 
-            # Find the lowest low in the period
+            # Get volume data if available
+            hist = self._get_cached_data(closes.name if hasattr(closes, 'name') else 'UNKNOWN')
+            volumes = None
+            if hist is not None and 'Volume' in hist.columns:
+                volumes = hist['Volume'].tail(lookback_days)
+
+            # Method 1: Find pivot lows (swing lows)
+            pivot_lows = self._find_pivot_lows(period_data, window=5)
+            
+            # Method 2: Price clustering - find areas where price spent significant time
+            price_clusters = self._find_price_clusters(period_data, volumes)
+            
+            # Method 3: Traditional support levels
             period_low = period_data.min()
+            support_percentiles = [period_data.quantile(q) for q in [0.05, 0.10, 0.15]]
+            
+            # Combine all potential support levels
+            all_supports = []
+            
+            # Add pivot lows with higher weight
+            all_supports.extend([(price, 3.0) for price in pivot_lows])
+            
+            # Add price clusters with medium weight
+            all_supports.extend([(price, 2.0) for price in price_clusters])
+            
+            # Add traditional levels with lower weight
+            all_supports.extend([(price, 1.0) for price in support_percentiles])
+            all_supports.append((period_low, 1.5))
+            
+            if not all_supports:
+                return period_low
+            
+            # Find the most significant support level
+            # Group nearby levels and weight by significance
+            current_price = closes.iloc[-1]
+            significant_supports = []
+            
+            for price, weight in all_supports:
+                if price and price < current_price:  # Only consider levels below current price
+                    # Check if this level has been tested multiple times
+                    test_count = self._count_support_tests(period_data, price, tolerance=0.02)
+                    final_weight = weight * (1 + test_count * 0.5)
+                    significant_supports.append((price, final_weight))
+            
+            if not significant_supports:
+                return period_low
+            
+            # Return the support level with highest combined weight
+            # But prefer levels that are not too far from current price
+            best_support = None
+            best_score = 0
+            
+            for price, weight in significant_supports:
+                # Distance penalty - prefer levels closer to current price
+                distance_factor = max(0.1, 1 - abs(current_price - price) / current_price)
+                score = weight * distance_factor
+                
+                if score > best_score:
+                    best_score = score
+                    best_support = price
+            
+            return best_support if best_support else period_low
 
-            # Also consider areas where price has bounced multiple times (support zones)
-            # Calculate support as the 10th percentile of prices in the period
-            support_zone = period_data.quantile(0.10)
-
-            # Return the higher of the two (more conservative support)
-            return max(period_low, support_zone)
-
-        except Exception:
+        except Exception as e:
+            logging.error(f"Error in _calculate_period_support: {e}")
             return None
+
+    def _find_pivot_lows(self, prices, window=5):
+        """Find pivot lows (swing lows) in price data"""
+        pivot_lows = []
+        try:
+            for i in range(window, len(prices) - window):
+                current_price = prices.iloc[i]
+                is_pivot_low = True
+                
+                # Check if current price is lower than surrounding prices
+                for j in range(i - window, i + window + 1):
+                    if j != i and prices.iloc[j] <= current_price:
+                        is_pivot_low = False
+                        break
+                
+                if is_pivot_low:
+                    pivot_lows.append(current_price)
+            
+            return pivot_lows
+        except Exception:
+            return []
+    
+    def _find_price_clusters(self, prices, volumes=None, num_clusters=3):
+        """Find price levels where price spent significant time (clustering)"""
+        try:
+            # Create price buckets
+            price_range = prices.max() - prices.min()
+            if price_range == 0:
+                return []
+            
+            bucket_size = price_range / 50  # 50 buckets
+            price_counts = {}
+            
+            for i, price in enumerate(prices):
+                bucket = int((price - prices.min()) / bucket_size)
+                bucket_price = prices.min() + bucket * bucket_size
+                
+                # Weight by volume if available
+                weight = volumes.iloc[i] if volumes is not None else 1
+                price_counts[bucket_price] = price_counts.get(bucket_price, 0) + weight
+            
+            # Find top clusters
+            sorted_clusters = sorted(price_counts.items(), key=lambda x: x[1], reverse=True)
+            return [price for price, count in sorted_clusters[:num_clusters]]
+            
+        except Exception:
+            return []
+    
+    def _count_support_tests(self, prices, support_level, tolerance=0.02):
+        """Count how many times price has tested a support level"""
+        try:
+            test_count = 0
+            support_range = support_level * tolerance
+            
+            for price in prices:
+                if abs(price - support_level) <= support_range:
+                    test_count += 1
+            
+            return min(test_count, 10)  # Cap at 10 for scoring purposes
+        except Exception:
+            return 0
 
     def _calculate_period_resistance(self, closes, lookback_days):
         """Calculate resistance level for a given period using highest high and key resistance zones"""
