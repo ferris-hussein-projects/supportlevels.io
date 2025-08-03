@@ -14,11 +14,6 @@ from functools import wraps
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 
-class Base(DeclarativeBase):
-    pass
-
-db = SQLAlchemy(model_class=Base)
-
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key-change-in-production")
 
@@ -28,10 +23,10 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
     "pool_pre_ping": True,
 }
-db.init_app(app)
 
-# Import models after db initialization
-from models import User, UserSettings, StockPopularity, TopAssetConfiguration
+# Import models and initialize db
+from models import db, User, UserSettings, StockPopularity, TopAssetConfiguration
+db.init_app(app)
 
 with app.app_context():
     db.create_all()

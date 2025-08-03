@@ -1,7 +1,13 @@
-from app import db
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import DeclarativeBase
 from datetime import datetime
 import json
 from werkzeug.security import generate_password_hash, check_password_hash
+
+class Base(DeclarativeBase):
+    pass
+
+db = SQLAlchemy(model_class=Base)
 
 
 class User(db.Model):
